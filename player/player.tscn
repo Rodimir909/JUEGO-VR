@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://dp707odycbxuq"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_cjdqc"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_cjdqc"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_cjdqc"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_0eft3"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_oaqsx"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_xhdhp"]
+
+[node name="Player" type="CharacterBody3D" unique_id=1988186890]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=361518633]
+mesh = SubResource("CapsuleMesh_cjdqc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1950674586]
+shape = SubResource("CapsuleShape3D_cjdqc")
+
+[node name="RightGlove" type="Area3D" parent="." unique_id=1914997167]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8570597, 0, 1.0657272)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RightGlove" unique_id=1311153534]
+shape = SubResource("SphereShape3D_cjdqc")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RightGlove" unique_id=1112325352]
+mesh = SubResource("SphereMesh_0eft3")
+
+[node name="LeftGlove" type="Area3D" parent="." unique_id=1318816949]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="LeftGlove" unique_id=917255806]
+shape = SubResource("SphereShape3D_oaqsx")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="LeftGlove" unique_id=56206139]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.9025686, 0, -1.2344271)
+mesh = SubResource("SphereMesh_xhdhp")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=726571948]
+transform = Transform3D(0.0003618757, 0, -0.99999994, 0, 1, 0, 0.99999994, 0, 0.0003618757, 0, 0.5708375, 0)

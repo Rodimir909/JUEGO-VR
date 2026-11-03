@@ -1,0 +1,48 @@
+import cv2
+import socket
+import json
+import mediapipe as mp
+
+UDP_IP = "127.0.0.1"
+UDP_PORT = 4242
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(max_num_hands=2, min_detection_confidence=0.7)
+
+cap = cv2.VideoCapture(0)
+
+while cap.isOpened():
+	ret, frame = cap.read()
+	if not ret:
+		break
+
+	image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+	results = hands.process(image_rgb)
+
+	hands_data = []
+
+	if results.multi_hand_landmarks and results.multi_handedness:
+		for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
+			# Obtener si es Left o Right según la clasificación de MediaPipe
+			label = results.multi_handedness[idx].classification[0].label # "Left" o "Right"
+			
+			# Usamos la muñeca (0) o nudillo central para la posición del guante
+			wrist = hand_landmarks.landmark[0]
+			
+			hands_data.append({
+				"hand": label,
+				"x": wrist.x,
+				"y": wrist.y,
+				"z": wrist.z  # Z representa la profundidad estimada por MediaPipe
+			})
+
+	if hands_data:
+		data = json.dumps(hands_data)
+		sock.sendto(data.encode('utf-8'), (UDP_IP, UDP_PORT))
+
+	if cv2.waitKey(1) & 0xFF == ord('q'):
+		break
+
+cap.release()
+cv2.destroyAllWindows()
