@@ -1,0 +1,65 @@
+¡Sí! Cuando vayas a trabajar en tu casa, tenés que crear el entorno virtual nuevamente en esa computadora e instalar MediaPipe y OpenCV. No necesitás volver a configurar todo el proyecto desde cero.
+
+Te dejo los pasos para hacerlo en la PC de tu casa.
+
+### 1. Instalar Python 3.11
+
+Primero necesitás tener Python 3.11 instalado. Es la versión que usamos porque MediaPipe 0.10.21 nos funcionó correctamente.
+
+Podés descargarlo desde [Python 3.11](https://www.python.org/downloads/release/python-3119/?utm_source=chatgpt.com).
+
+### 2. Abrir CMD en la carpeta Python del proyecto
+
+Por ejemplo, si tenés el proyecto en `C:\BoxingGames\Python`:
+
+```
+cd C:\BoxingGames\Python
+```
+
+### 3. Crear el entorno virtual
+
+```
+py -3.11 -m venv venv311
+```
+
+Esto crea una carpeta llamada `venv311`.
+
+### 4. Activarlo
+
+```
+venv311\Scripts\activate
+```
+
+Vas a ver `(venv311)` al principio de la línea.
+
+### 5. Instalar las librerías
+
+Con el entorno activado, ejecutá:
+
+```
+python -m pip install --upgrade pip
+python -m pip install mediapipe==0.10.21 opencv-python
+```
+
+### 6. Comprobar que funciona
+
+```
+python -c "import mediapipe as mp; import cv2; print(mp.__version__)"
+```
+
+Si aparece `0.10.21`, está listo.
+
+Importante: cada vez que abras el proyecto en esa computadora, solamente necesitás entrar a la carpeta y activar el entorno:
+
+```
+cd C:\BoxingGames\Python
+venv311\Scripts\activate
+```
+
+Después ejecutás el programa normalmente:
+
+```
+python holistic_test.py
+```
+
+El entorno virtual no se comparte entre computadoras: cada PC tiene que tener el suyo. Pero el código Python sí podés copiarlo entre ambas.
