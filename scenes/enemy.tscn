@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://rgb4b6juon8d"]
+
+[ext_resource type="Script" uid="uid://bwo7rvs827yyd" path="res://scripts/enemy.gd" id="1_enemy"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
+radius = 0.4
+height = 1.9
+
+[sub_resource type="StandardMaterial3D" id="Mat_body"]
+albedo_color = Color(0.2, 0.35, 0.8, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.35
+height = 1.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_head"]
+albedo_color = Color(0.9, 0.7, 0.55, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_head"]
+radius = 0.22
+height = 0.44
+
+[sub_resource type="StandardMaterial3D" id="Mat_glove"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_glove"]
+size = Vector3(0.24, 0.24, 0.4)
+
+[node name="Enemy" type="CharacterBody3D" unique_id=1809449653 groups=["enemy"]]
+script = ExtResource("1_enemy")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=535290025]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+shape = SubResource("CapsuleShape3D_enemy")
+
+[node name="Body" type="MeshInstance3D" parent="." unique_id=47435503]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+material_override = SubResource("Mat_body")
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="Head" type="MeshInstance3D" parent="." unique_id=957989477]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+material_override = SubResource("Mat_head")
+mesh = SubResource("SphereMesh_head")
+
+[node name="GloveR" type="MeshInstance3D" parent="." unique_id=1061799635]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 1.2, -0.4)
+material_override = SubResource("Mat_glove")
+mesh = SubResource("BoxMesh_glove")
+
+[node name="GloveL" type="MeshInstance3D" parent="." unique_id=749867718]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, 1.2, -0.4)
+material_override = SubResource("Mat_glove")
+mesh = SubResource("BoxMesh_glove")
