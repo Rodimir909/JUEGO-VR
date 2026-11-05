@@ -65,7 +65,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.22941065)
 fov = 80.0
 
-[node name="RightGlove" type="Area3D" parent="." unique_id=1914997167]
+[node name="RightGlove" type="Area3D" parent="." unique_id=1914997167 groups=["puño"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, 0.55, -0.4)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="RightGlove" unique_id=1311153534]
@@ -74,7 +74,7 @@ shape = SubResource("SphereShape3D_cjdqc")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="RightGlove" unique_id=1112325352]
 mesh = SubResource("SphereMesh_0eft3")
 
-[node name="LeftGlove" type="Area3D" parent="." unique_id=1318816949]
+[node name="LeftGlove" type="Area3D" parent="." unique_id=1318816949 groups=["puño"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, 0.55, -0.4)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="LeftGlove" unique_id=917255806]

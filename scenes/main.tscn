@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bewkfaytrciub"]
 
-[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://scenes/player ishma.tscn" id="1_player"]
 [ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="2_enemy"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_hud"]
 

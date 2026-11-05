@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://b1b4vyl8si2ih"]
+
+[ext_resource type="Script" uid="uid://b8l8mywl85bnu" path="res://objetivos.gd" id="1_mr0qn"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cjdqc"]
+size = Vector3(1, 1, 0.3413391)
+
+[sub_resource type="BoxMesh" id="BoxMesh_0eft3"]
+size = Vector3(1, 1, 0.33666992)
+
+[node name="colision" type="Area3D" unique_id=819665145]
+script = ExtResource("1_mr0qn")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1416003405]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.04899597)
+shape = SubResource("BoxShape3D_cjdqc")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=689225486]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.052856445)
+mesh = SubResource("BoxMesh_0eft3")
+
+[connection signal="area_entered" from="." to="." method="_on_area_entered"]
