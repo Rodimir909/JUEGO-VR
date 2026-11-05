@@ -15,7 +15,7 @@ script = ExtResource("1_rwigk")
 [node name="Player" parent="." unique_id=1988186890 instance=ExtResource("2_kwml1")]
 
 [node name="bolsa" type="Area3D" parent="." unique_id=139973486]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.3951633)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.165705)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="bolsa" unique_id=149190132]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45410156, 0)
@@ -27,6 +27,7 @@ mesh = SubResource("CapsuleMesh_oaqsx")
 
 [node name="combo" type="Label3D" parent="bolsa" unique_id=1973592145]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7105786, 0.5259372)
+visible = false
 text = "COMBO 1"
 
 [node name="tiempodecombo" type="Timer" parent="." unique_id=389089327]

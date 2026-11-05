@@ -32,7 +32,7 @@ extends CharacterBody3D
 
 @export_group("Suavizado")
 # Mas alto = mas rapido y mas ruido. Mas bajo = mas suave y mas lag.
-@export var head_smoothing := 5.0
+@export var head_smoothing := 1000.0
 @export var glove_smoothing := 30.0
 
 @export_group("Guantes")
@@ -91,14 +91,9 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
-	# Nos quedamos solo con el ULTIMO paquete: si Godot se atrasa,
-	# procesar los viejos solo agrega latencia.
-	var latest: Variant = null
-
-	while udp.get_available_packet_count() > 0:
-		var parsed = JSON.parse_string(udp.get_packet().get_string_from_utf8())
-		if typeof(parsed) == TYPE_DICTIONARY:
-			latest = parsed
+	# Nos quedamos solo con el ULTIMO paquete y lo parseamos UNA vez: si Godot se atrasa,
+	# los viejos solo agregan latencia (y parsearlos para tirarlos es CPU desperdiciada).
+	var latest: Variant = _read_latest_packet()
 
 	left_lost += delta
 	right_lost += delta
@@ -124,6 +119,22 @@ func _process(delta: float) -> void:
 # Lectura del paquete
 # ---------------------------------------------------------------------
 
+func _read_latest_packet() -> Variant:
+	var count := udp.get_available_packet_count()
+	if count == 0:
+		return null
+
+	# Se descartan los viejos sin decodificarlos: solo el ultimo se convierte a texto y JSON.
+	var bytes := PackedByteArray()
+	for i in count:
+		bytes = udp.get_packet()
+
+	var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
+	if typeof(parsed) == TYPE_DICTIONARY:
+		return parsed
+	return null
+
+
 func _read_packet(data: Dictionary) -> void:
 
 	var l: Variant = _arm_target(data.get("left"), left_shoulder_anchor)
@@ -144,7 +155,8 @@ func _arm_target(arm: Variant, anchor: Vector3) -> Variant:
 	if typeof(arm) != TYPE_DICTIONARY or not arm.has("rel") or not arm.has("wrist"):
 		return null
 
-	if float(arm["wrist"]["visibility"]) < min_visibility:
+	var wrist: Variant = arm["wrist"]
+	if typeof(wrist) != TYPE_DICTIONARY or float(wrist.get("visibility", 0.0)) < min_visibility:
 		return null
 
 	var rel: Dictionary = arm["rel"]
