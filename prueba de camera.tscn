@@ -3,7 +3,35 @@
 [ext_resource type="Script" uid="uid://cv1ae86e8igch" path="res://node.gd" id="1_rwigk"]
 [ext_resource type="PackedScene" uid="uid://dp707odycbxuq" path="res://player/player.tscn" id="2_kwml1"]
 
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_cjdqc"]
+height = 2.9082031
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_oaqsx"]
+height = 2.909668
+
 [node name="Node" type="Node3D" unique_id=1174570854]
 script = ExtResource("1_rwigk")
 
 [node name="Player" parent="." unique_id=1988186890 instance=ExtResource("2_kwml1")]
+
+[node name="bolsa" type="Area3D" parent="." unique_id=139973486]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.3951633)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="bolsa" unique_id=149190132]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45410156, 0)
+shape = SubResource("CapsuleShape3D_cjdqc")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="bolsa" unique_id=920573687]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45483398, 0)
+mesh = SubResource("CapsuleMesh_oaqsx")
+
+[node name="combo" type="Label3D" parent="bolsa" unique_id=1973592145]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7105786, 0.5259372)
+text = "COMBO 1"
+
+[node name="tiempodecombo" type="Timer" parent="." unique_id=389089327]
+wait_time = 2.0
+one_shot = true
+
+[connection signal="area_entered" from="bolsa" to="." method="_on_bolsa_area_entered"]
+[connection signal="timeout" from="tiempodecombo" to="." method="_on_tiempodecombo_timeout"]
