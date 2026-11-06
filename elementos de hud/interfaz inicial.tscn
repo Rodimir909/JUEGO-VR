@@ -1,0 +1,71 @@
+[gd_scene format=3 uid="uid://utmjbpvw1gm7"]
+
+[ext_resource type="Script" uid="uid://2tmeurisa23t" path="res://interfaz_inicial.gd" id="1_wyx66"]
+[ext_resource type="Texture2D" uid="uid://cd0qa6sbxtfbq" path="res://elementos de hud/Logo de Boxeo Mortal Ñapi.png" id="2_ptm1t"]
+[ext_resource type="FontFile" uid="uid://delmp35m7jx0t" path="res://elementos de hud/BebasNeue-Regular.otf" id="3_6ldlf"]
+[ext_resource type="AudioStream" uid="uid://cvrus4ub3jhf2" path="res://elementos de hud/la mona juego.wav" id="4_ptm1t"]
+
+[node name="interfaz inicial" type="Control" unique_id=882686023]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_wyx66")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1112864276]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=224659651]
+scale = Vector2(0.533, 0.533)
+texture = ExtResource("2_ptm1t")
+centered = false
+
+[node name="jugar" type="Button" parent="." unique_id=358573848]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -63.5
+offset_top = 62.0
+offset_right = 63.5
+offset_bottom = 148.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("3_6ldlf")
+theme_override_font_sizes/font_size = 64
+text = "JUGAR"
+
+[node name="salir" type="Button" parent="." unique_id=1855924233]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -63.5
+offset_top = 170.0
+offset_right = 63.5
+offset_bottom = 256.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("3_6ldlf")
+theme_override_font_sizes/font_size = 64
+text = "SALIR"
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=896162831]
+stream = ExtResource("4_ptm1t")
+volume_db = -5.58
+autoplay = true
+
+[connection signal="pressed" from="jugar" to="." method="_on_jugar_pressed"]
+[connection signal="pressed" from="salir" to="." method="_on_salir_pressed"]
