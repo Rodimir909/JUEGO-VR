@@ -1,0 +1,114 @@
+[gd_scene format=3 uid="uid://ovlligw7y3sm"]
+
+[ext_resource type="ArrayMesh" uid="uid://dca4tpk5c7oao" path="res://Texturas/escenario_gimnasio.obj" id="1_36rfg"]
+[ext_resource type="PackedScene" path="res://scenes/player ishma.tscn" id="2_bqrjk"]
+[ext_resource type="PackedScene" uid="uid://6ufluadok1wr" path="res://scenes/hud.tscn" id="3_bn284"]
+[ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="4_ed3wf"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cjdqc"]
+size = Vector3(10.160076, 0.16015244, 10.707542)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bn284"]
+size = Vector3(0.123413086, 0.08300781, 8.970808)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nobk4"]
+albedo_color = Color(0.55, 0.55, 0.6, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_orcvq"]
+size = Vector3(26.02926, 6.3651733, 0.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bqrjk"]
+size = Vector3(12.4, 4, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bn284"]
+albedo_color = Color(0.3, 0.3, 0.32, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ed3wf"]
+size = Vector3(26.187916, 0.2, 24.179958)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_fbqkl"]
+size = Vector3(12.4, 0.2, 12.4)
+
+[node name="escenario_4" type="Node3D" unique_id=1487991506]
+
+[node name="Escenario" type="StaticBody3D" parent="." unique_id=575368672]
+
+[node name="EscenarioGimnasio" type="MeshInstance3D" parent="Escenario" unique_id=553216043]
+mesh = ExtResource("1_36rfg")
+
+[node name="Piso" type="CollisionShape3D" parent="Escenario" unique_id=1311889592]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.11952233, 0.008787155, -0.2772423)
+shape = SubResource("BoxShape3D_cjdqc")
+
+[node name="Pared_1" type="CollisionShape3D" parent="Escenario" unique_id=1018279421]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.3618994, 1.5644581, -0.018286347)
+shape = SubResource("BoxShape3D_bn284")
+
+[node name="Pared_2" type="CollisionShape3D" parent="Escenario" unique_id=1226864732]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.320222, 1.5644581, -0.018286347)
+shape = SubResource("BoxShape3D_bn284")
+
+[node name="Pared_3" type="CollisionShape3D" parent="Escenario" unique_id=2010667821]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -0.021033287, 1.5644581, 4.353758)
+shape = SubResource("BoxShape3D_bn284")
+
+[node name="Pared_4" type="CollisionShape3D" parent="Escenario" unique_id=79280226]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -0.021033287, 1.5644581, -4.375201)
+shape = SubResource("BoxShape3D_bn284")
+
+[node name="WallS" type="StaticBody3D" parent="." unique_id=1228546361]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 2, 11.1042795)
+
+[node name="Mesh" type="MeshInstance3D" parent="WallS" unique_id=1726192931]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.097515106, 0.0033874512, 0)
+material_override = SubResource("StandardMaterial3D_nobk4")
+mesh = SubResource("BoxMesh_orcvq")
+
+[node name="Collision" type="CollisionShape3D" parent="WallS" unique_id=946585787]
+shape = SubResource("BoxShape3D_bqrjk")
+
+[node name="Ceiling" type="StaticBody3D" parent="." unique_id=570537565]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.184997, 0)
+
+[node name="Mesh" type="MeshInstance3D" parent="Ceiling" unique_id=1472988224]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.017638683, 0, -0.084527016)
+material_override = SubResource("StandardMaterial3D_bn284")
+mesh = SubResource("BoxMesh_ed3wf")
+
+[node name="Collision" type="CollisionShape3D" parent="Ceiling" unique_id=1511229347]
+shape = SubResource("BoxShape3D_fbqkl")
+
+[node name="luz" type="Node3D" parent="." unique_id=1174709752]
+
+[node name="OmniLight3D" type="OmniLight3D" parent="luz" unique_id=984553878]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 4.925175, -0.034499645)
+light_energy = 16.0
+omni_range = 16.0
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="luz" unique_id=322733192]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.201964, 4.925175, -0.034499645)
+light_energy = 16.0
+omni_range = 16.0
+
+[node name="OmniLight3D3" type="OmniLight3D" parent="luz" unique_id=1339219107]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.1294565, 4.925175, -0.034499645)
+light_energy = 16.0
+omni_range = 16.0
+
+[node name="OmniLight3D4" type="OmniLight3D" parent="luz" unique_id=236777667]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.30896282, 4.925175, 11.0236225)
+light_energy = 16.0
+omni_range = 16.0
+
+[node name="OmniLight3D5" type="OmniLight3D" parent="luz" unique_id=1268039727]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.30896282, 4.925175, -13.050377)
+light_energy = 16.0
+omni_range = 16.0
+
+[node name="Player" parent="." unique_id=618670275 instance=ExtResource("2_bqrjk")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05043447, 3.3219042)
+
+[node name="HUD" parent="." unique_id=556049203 instance=ExtResource("3_bn284")]
+
+[node name="Enemy" parent="." unique_id=1809449653 instance=ExtResource("4_ed3wf")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, -3.6035907)

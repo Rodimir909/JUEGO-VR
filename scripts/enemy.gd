@@ -93,10 +93,10 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	var to_player := Global.player_position - global_position
+	var to_player = Global.player_position - global_position
 	to_player.y = 0.0
-	var dist := to_player.length()
-	var dir := to_player.normalized() if dist > 0.01 else Vector3.ZERO
+	var dist = to_player.length()
+	var dir = to_player.normalized() if dist > 0.01 else Vector3.ZERO
 
 	# Mirar al jugador
 	if dist > 0.05:
@@ -118,7 +118,7 @@ func _physics_process(delta: float) -> void:
 	# Aprende tus hábitos
 	block_habit = lerpf(block_habit, 1.0 if Global.player_blocking else 0.0, delta * 0.6)
 	punch_habit = maxf(punch_habit - delta * 0.2, 0.0)
-	var retreating := dist > prev_dist + 0.002 and dist > 1.2
+	var retreating = dist > prev_dist + 0.002 and dist > 1.2
 	retreat_habit = lerpf(retreat_habit, 1.0 if retreating else 0.0, delta * 0.8)
 	prev_dist = dist
 
@@ -128,7 +128,7 @@ func _physics_process(delta: float) -> void:
 			Global.enemy_parrying = false
 
 	# Reacciona cuando empezás o terminás de pegar
-	var p_now := Global.player_punching
+	var p_now = Global.player_punching
 	if p_now and not prev_player_punching:
 		punch_habit = minf(punch_habit + 1.0, 4.0)
 		_react_to_punch(dist)
@@ -423,13 +423,13 @@ func _set_glove_color(c: Color) -> void:
 
 
 func _flat_distance() -> float:
-	var d := Global.player_position - global_position
+	var d = Global.player_position - global_position
 	d.y = 0.0
 	return d.length()
 
 
 func _dir_to_player() -> Vector3:
-	var d := Global.player_position - global_position
+	var d = Global.player_position - global_position
 	d.y = 0.0
 	return d.normalized()
 
