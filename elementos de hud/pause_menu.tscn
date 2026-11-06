@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://dxlpgc8bq0gqh"]
+
+[ext_resource type="Script" uid="uid://cyk3ca8tdmqyi" path="res://elementos de hud/pause_menu.gd" id="1_ytr1h"]
+
+[node name="PauseMenu" type="CanvasLayer" unique_id=1588105238]
+process_mode = 3
+script = ExtResource("1_ytr1h")

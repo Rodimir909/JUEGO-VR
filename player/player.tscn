@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://dp707odycbxuq"]
 
 [ext_resource type="Script" uid="uid://bf3rvsdt0axr5" path="res://player/player.gd" id="1_oul6g"]
+[ext_resource type="PackedScene" path="res://elementos de hud/pause_menu.tscn" id="2_pause"]
+[ext_resource type="Script" uid="uid://cyk3ca8tdmqyi" path="res://elementos de hud/pause_menu.gd" id="3_g1dw6"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_oul6g"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -82,3 +84,10 @@ shape = SubResource("SphereShape3D_oaqsx")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="LeftGlove" unique_id=56206139]
 mesh = SubResource("SphereMesh_xhdhp")
+
+[node name="PauseMenu" parent="." unique_id=350889864 instance=ExtResource("2_pause")]
+script = ExtResource("3_g1dw6")
+cursor_size = 18.0
+cursor_color = Color(0, 1, 1, 1)
+hover_color = Color(1.4, 1.4, 0.6, 1)
+quit_on_exit = true
