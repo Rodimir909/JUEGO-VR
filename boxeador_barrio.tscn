@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://d0cixs0ybvws1"]
+
+[ext_resource type="ArrayMesh" uid="uid://37tt6jjr5d0o" path="res://Texturas/boxeador_estratega.obj" id="1_qsbyk"]
+
+[node name="Node3D" type="CharacterBody3D" unique_id=45127952]
+
+[node name="BoxeadorEstratega" type="MeshInstance3D" parent="." unique_id=1937086482]
+mesh = ExtResource("1_qsbyk")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1001818901]

@@ -1,8 +1,8 @@
 extends CharacterBody3D
 
-@export var speed := 4.0
+@export var speed := 6.0
 @export var mouse_sensitivity := 0.0025
-@export var punch_cooldown := 0.5
+@export var punch_cooldown := 0.2
 
 const REST_R := Vector3(0.3, -0.3, -0.6)
 const REST_L := Vector3(-0.3, -0.3, -0.6)
@@ -44,8 +44,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 
-	var fighting := Global.is_fighting()
-	var stunned := Time.get_ticks_msec() < Global.player_stun_until
+	var fighting = Global.is_fighting()
+	var stunned = Time.get_ticks_msec() < Global.player_stun_until
 	var wish := Vector3.ZERO
 
 	if fighting:
@@ -72,7 +72,7 @@ func _physics_process(delta: float) -> void:
 			_punch(false)
 
 	# Animación de guantes
-	var guard := Global.player_blocking
+	var guard = Global.player_blocking
 	if glove_l != active_glove:
 		glove_l.position = glove_l.position.lerp(GUARD_L if guard else REST_L, 15.0 * delta)
 	if glove_r != active_glove:

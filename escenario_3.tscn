@@ -1,0 +1,57 @@
+[gd_scene format=3 uid="uid://cxqmny2p0hw1i"]
+
+[ext_resource type="ArrayMesh" uid="uid://bxgpbb1u8u6xb" path="res://Texturas/escenario_estadio.obj" id="1_7cvcu"]
+[ext_resource type="PackedScene" path="res://scenes/player ishma.tscn" id="2_46ipp"]
+[ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="3_p3vao"]
+[ext_resource type="PackedScene" uid="uid://6ufluadok1wr" path="res://scenes/hud.tscn" id="4_awgsi"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cjdqc"]
+size = Vector3(11.796753, 0.064453125, 11.58667)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0eft3"]
+size = Vector3(0.123413086, 0.08300781, 9.9984665)
+
+[node name="escenario 3" type="Node3D" unique_id=1657778141]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=862912212]
+
+[node name="EscenarioEstadio" type="MeshInstance3D" parent="StaticBody3D" unique_id=927681010]
+mesh = ExtResource("1_7cvcu")
+
+[node name="Piso" type="CollisionShape3D" parent="StaticBody3D" unique_id=582212111]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.058654785, 0, 0.12976074)
+shape = SubResource("BoxShape3D_cjdqc")
+
+[node name="Pared_1" type="CollisionShape3D" parent="StaticBody3D" unique_id=252980441]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.999444, 1.555671, -0.04383087)
+shape = SubResource("BoxShape3D_0eft3")
+
+[node name="Pared_2" type="CollisionShape3D" parent="StaticBody3D" unique_id=1246938981]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.968026, 1.555671, -0.04383087)
+shape = SubResource("BoxShape3D_0eft3")
+
+[node name="Pared_3" type="CollisionShape3D" parent="StaticBody3D" unique_id=1199745388]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -0.13759184, 1.555671, -4.9704256)
+shape = SubResource("BoxShape3D_0eft3")
+
+[node name="Pared_4" type="CollisionShape3D" parent="StaticBody3D" unique_id=1497949156]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -0.13759184, 1.555671, 4.9596887)
+shape = SubResource("BoxShape3D_0eft3")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=265029469]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 28.421875, -0.034499645)
+light_energy = 16.0
+omni_range = 300.79703
+
+[node name="Player" parent="." unique_id=1941943038 instance=ExtResource("2_46ipp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3.2300715)
+
+[node name="Enemy" parent="." unique_id=1809449653 instance=ExtResource("3_p3vao")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.8929968)
+
+[node name="HUD" parent="." unique_id=556049203 instance=ExtResource("4_awgsi")]
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="." unique_id=402046516]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 5.8720865, -0.034499645)
+light_energy = 16.0
+omni_range = 16.0

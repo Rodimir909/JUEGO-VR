@@ -1,11 +1,11 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://6ufluadok1wr"]
 
-[ext_resource type="Script" path="res://scripts/hud.gd" id="1_hud"]
+[ext_resource type="Script" uid="uid://dj2hx5vvf2osr" path="res://scripts/hud.gd" id="1_hud"]
 
-[node name="HUD" type="CanvasLayer"]
+[node name="HUD" type="CanvasLayer" unique_id=556049203]
 script = ExtResource("1_hud")
 
-[node name="RedOverlay" type="ColorRect" parent="."]
+[node name="RedOverlay" type="ColorRect" parent="." unique_id=878475027]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -14,7 +14,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.85, 0, 0, 0)
 
-[node name="GameOverLabel" type="Label" parent="."]
+[node name="GameOverLabel" type="Label" parent="." unique_id=1150308637]
 visible = false
 anchors_preset = 15
 anchor_right = 1.0
