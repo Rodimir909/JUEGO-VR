@@ -92,7 +92,7 @@ func _update_message() -> void:
 				title = "¡GANASTE LA PELEA!"
 			label.text = "%s\n\nVOS %d - %d ENEMIGO" % [title, Global.player_wins, Global.enemy_wins]
 			if Global.phase_time <= 0.0:
-				label.text += "\n\nClic o R para reiniciar"
+				label.text += "\n\nClick o R para reiniciar"
 
 
 func _on_player_hit(blocked: bool) -> void:

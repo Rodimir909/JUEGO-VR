@@ -40,7 +40,7 @@ var enemy_parrying := false    # ventana de contragolpe al cubrirse justo a tiem
 var enemy_position := Vector3(0, 0, -2)
 
 # --- Valores ajustables ---
-var player_punch_damage := 8.0
+var player_punch_damage := 15
 var enemy_punch_damage := 8.0
 var block_reduction := 0.8     # 0.8 = el enemigo cubierto recibe solo el 20% del daño
 var enemy_attack_range := 1.8
