@@ -113,7 +113,7 @@ var head_lost := 0.0
 
 var packet_age := 0.0
 var health := 0.0
-var guarding := false
+
 
 var pause_pose := false
 var pause_hold := 0.0
@@ -192,6 +192,7 @@ func _process(delta: float) -> void:
 
 	_tick_punches(delta)
 	_update_pause_gesture(delta)
+	
 
 	# En pausa el cuerpo queda congelado; solo seguimos leyendo la webcam (para el cursor)
 	if get_tree().paused:
@@ -206,8 +207,12 @@ func _physics_process(_delta: float) -> void:
 		return
 	_check_hits("left", left_glove)
 	_check_hits("right", right_glove)
-
-
+	Global.player_position = global_position
+	$Head/RayCast3D.target_position=Global.enemy_position
+	
+	var tangente := atan2($Head/RayCast3D.target_position.x, $Head/RayCast3D.target_position.z)
+	print (rad_to_deg(tangente))
+	rotation_degrees.y = rad_to_deg(tangente)-180
 # ---------------------------------------------------------------------
 # Lectura del paquete
 # ---------------------------------------------------------------------
@@ -439,9 +444,9 @@ func _check_hits(side: String, glove: Area3D) -> void:
 # ---------------------------------------------------------------------
 
 func _set_guard(active: bool) -> void:
-	if active == guarding:
+	if active == Global.player_blocking:
 		return
-	guarding = active
+	Global.player_blocking = active
 	if guard_glow:
 		_set_glove_glow(left_glove, active)
 		_set_glove_glow(right_glove, active)
@@ -462,7 +467,7 @@ func _set_glove_glow(glove: Node3D, on: bool) -> void:
 
 # Los enemigos llaman a esto. Devuelve true si el golpe fue bloqueado por completo.
 func take_hit(damage: float, attacker: Node = null) -> bool:
-	if guarding:
+	if Global.player_blocking:
 		blocked.emit(damage, attacker)
 		damage *= guard_damage_multiplier
 		if damage <= 0.0:

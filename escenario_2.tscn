@@ -2,7 +2,7 @@
 
 [ext_resource type="ArrayMesh" uid="uid://cydsvtnr884f5" path="res://Texturas/escenario_club.obj" id="1_ohcvn"]
 [ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="3_c0wqe"]
-[ext_resource type="PackedScene" path="res://scenes/player ishma.tscn" id="4_dmn3s"]
+[ext_resource type="PackedScene" uid="uid://dp707odycbxuq" path="res://player/player.tscn" id="4_dmn3s"]
 [ext_resource type="PackedScene" uid="uid://6ufluadok1wr" path="res://scenes/hud.tscn" id="4_ohcvn"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ohcvn"]
@@ -37,8 +37,6 @@ size = Vector3(0.049804688, 0.040100098, 8.711243)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2.335)
 
 [node name="HUD" parent="." unique_id=944825964 instance=ExtResource("4_ohcvn")]
-
-[node name="Player" parent="." unique_id=1950537623 instance=ExtResource("4_dmn3s")]
 
 [node name="Ceiling" type="StaticBody3D" parent="." unique_id=522358502]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.1, 0)
@@ -108,3 +106,6 @@ shape = SubResource("BoxShape3D_xhdhp")
 [node name="CollisionShape3D5" type="CollisionShape3D" parent="StaticBody3D" unique_id=598333459]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.3471956, 1.5253227, 0.023948193)
 shape = SubResource("BoxShape3D_xhdhp")
+
+[node name="Player" parent="." unique_id=1988186890 instance=ExtResource("4_dmn3s")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.99328244, 0.699)

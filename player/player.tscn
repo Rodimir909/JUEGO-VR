@@ -1,8 +1,7 @@
 [gd_scene format=3 uid="uid://dp707odycbxuq"]
 
 [ext_resource type="Script" uid="uid://bf3rvsdt0axr5" path="res://player/player.gd" id="1_oul6g"]
-[ext_resource type="PackedScene" path="res://elementos de hud/pause_menu.tscn" id="2_pause"]
-[ext_resource type="Script" uid="uid://cyk3ca8tdmqyi" path="res://elementos de hud/pause_menu.gd" id="3_g1dw6"]
+[ext_resource type="PackedScene" uid="uid://dxlpgc8bq0gqh" path="res://elementos de hud/pause_menu.tscn" id="2_pause"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_oul6g"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -54,7 +53,6 @@ transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545
 shadow_enabled = true
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=361518633]
-visible = false
 mesh = SubResource("CapsuleMesh_cjdqc")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1950674586]
@@ -63,7 +61,9 @@ shape = SubResource("CapsuleShape3D_cjdqc")
 [node name="Head" type="Node3D" parent="." unique_id=1791550276]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Head" unique_id=726571948]
+[node name="RayCast3D" type="RayCast3D" parent="Head" unique_id=851954044]
+
+[node name="Camera3D" type="Camera3D" parent="Head/RayCast3D" unique_id=726571948]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.22941065)
 fov = 80.0
 
@@ -86,8 +86,3 @@ shape = SubResource("SphereShape3D_oaqsx")
 mesh = SubResource("SphereMesh_xhdhp")
 
 [node name="PauseMenu" parent="." unique_id=350889864 instance=ExtResource("2_pause")]
-script = ExtResource("3_g1dw6")
-cursor_size = 18.0
-cursor_color = Color(0, 1, 1, 1)
-hover_color = Color(1.4, 1.4, 0.6, 1)
-quit_on_exit = true

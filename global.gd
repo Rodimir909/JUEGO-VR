@@ -39,6 +39,7 @@ var enemy_punching := false
 var enemy_parrying := false    # ventana de contragolpe al cubrirse justo a tiempo
 var enemy_position := Vector3(0, 0, -2)
 
+
 # --- Valores ajustables ---
 var player_punch_damage := 15
 var enemy_punch_damage := 8.0
