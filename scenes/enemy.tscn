@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://rgb4b6juon8d"]
 
 [ext_resource type="Script" uid="uid://bwo7rvs827yyd" path="res://scripts/enemy.gd" id="1_enemy"]
+[ext_resource type="ArrayMesh" uid="uid://ckr1cx1kg22p1" path="res://Texturas/boxeador_retador.obj" id="2_boxer"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
 radius = 0.4
@@ -33,15 +34,9 @@ script = ExtResource("1_enemy")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
 shape = SubResource("CapsuleShape3D_enemy")
 
-[node name="Body" type="MeshInstance3D" parent="." unique_id=47435503]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
-material_override = SubResource("Mat_body")
-mesh = SubResource("CapsuleMesh_body")
-
-[node name="Head" type="MeshInstance3D" parent="." unique_id=957989477]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
-material_override = SubResource("Mat_head")
-mesh = SubResource("SphereMesh_head")
+[node name="BoxerModel" type="MeshInstance3D" parent="." unique_id=47435503]
+transform = Transform3D(-0.62, 0, 0, 0, 0.62, 0, 0, 0, -0.62, 0, 0, 0)
+mesh = ExtResource("2_boxer")
 
 [node name="GloveR" type="MeshInstance3D" parent="." unique_id=1061799635]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 1.2, -0.4)

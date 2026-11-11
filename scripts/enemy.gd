@@ -26,7 +26,7 @@ const RAGE_COLOR := Color(1.0, 0.25, 0.25)
 
 @onready var glove_r: MeshInstance3D = $GloveR
 @onready var glove_l: MeshInstance3D = $GloveL
-@onready var body: MeshInstance3D = $Body
+@onready var body: MeshInstance3D = $BoxerModel
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var base_diff := 1.0
@@ -53,8 +53,10 @@ var retreat_habit := 0.0   # cuánto te alejás (0 a 1)
 var prev_player_punching := false
 var prev_dist := 0.0
 var ko := false
-var body_color: Color
+var body_rest_scale := Vector3.ONE
+var idle_time := 0.0
 var flash_tween: Tween
+var body_pose_tween: Tween
 var tweens: Dictionary = {}
 
 
@@ -62,7 +64,7 @@ func _ready() -> void:
 	# Dificultad según el round (arranca más alta y sube más)
 	base_diff = minf(1.25 + 0.25 * float(Global.round_number - 1), 2.0)
 	_update_difficulty()
-	body_color = (body.material_override as StandardMaterial3D).albedo_color
+	body_rest_scale = body.scale
 	Global.enemy_hit.connect(_on_enemy_hit)
 	Global.enemy_died.connect(_on_died)
 	_set_state(State.RECOVER, 0.35)
@@ -97,6 +99,8 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 		move_and_slide()
 		return
+
+	_idle_animation(delta)
 
 	var to_player = Global.player_position - global_position
 	to_player.y = 0.0
@@ -271,6 +275,7 @@ func _windup_done() -> void:
 
 func _strike() -> void:
 	var heavy := attack == Attack.HEAVY
+	_animate_body_punch(heavy)
 	var mult := 1.2 if rage else 1.0
 	if _flat_distance() <= Global.enemy_attack_range + 0.4:
 		Global.damage_player((heavy_damage if heavy else jab_damage) * mult, heavy)
@@ -440,12 +445,11 @@ func _dir_to_player() -> Vector3:
 
 
 func _on_enemy_hit(blocked: bool) -> void:
-	var mat := body.material_override as StandardMaterial3D
 	if flash_tween:
 		flash_tween.kill()
-	mat.albedo_color = Color(0.6, 0.7, 1.0) if blocked else Color(1, 1, 1)
+	body.scale = body_rest_scale * (1.02 if blocked else 1.05)
 	flash_tween = create_tween()
-	flash_tween.tween_property(mat, "albedo_color", body_color, 0.2)
+	flash_tween.tween_property(body, "scale", body_rest_scale, 0.16)
 	# Un golpe limpio interrumpe el ataque, salvo el pesado (super armadura).
 	# Además, a mayor dificultad y en furia, a veces aguanta el golpe y sigue.
 	if not blocked and state == State.WINDUP and attack != Attack.HEAVY:
@@ -468,3 +472,18 @@ func _on_died() -> void:
 	var t := create_tween().set_parallel(true)
 	t.tween_property(self, "rotation:x", deg_to_rad(90.0), 0.6)
 	t.tween_property(self, "position:y", 0.3, 0.6)
+
+
+func _idle_animation(delta: float) -> void:
+	idle_time += delta
+	body.position.y = sin(idle_time * 4.0) * 0.018
+	body.rotation.z = sin(idle_time * 2.2) * 0.025
+
+
+func _animate_body_punch(heavy: bool) -> void:
+	if body_pose_tween and body_pose_tween.is_running():
+		body_pose_tween.kill()
+	body_pose_tween = create_tween()
+	var lean := deg_to_rad(10.0 if heavy else 5.0)
+	body_pose_tween.tween_property(body, "rotation:x", -lean, 0.08)
+	body_pose_tween.tween_property(body, "rotation:x", 0.0, 0.18)
