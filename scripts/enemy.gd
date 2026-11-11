@@ -68,6 +68,11 @@ func _ready() -> void:
 	_set_state(State.RECOVER, 0.35)
 
 
+## Recibe un golpe del jugador. El daño ya viene calculado por la velocidad del guante.
+func take_punch(damage: float, _force: float = 0.0, _side: String = "") -> void:
+	Global.damage_enemy(damage)
+
+
 func _update_difficulty() -> void:
 	diff = base_diff * (1.25 if rage else 1.0)
 	move_speed = base_move_speed * diff

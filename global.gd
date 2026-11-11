@@ -124,6 +124,10 @@ func damage_player(mult := 1.0, pierce := false) -> void:
 
 
 func hit_enemy() -> void:
+	damage_enemy(float(player_punch_damage))
+
+
+func damage_enemy(damage: float) -> void:
 	if not is_fighting():
 		return
 	var blocked := enemy_blocking
@@ -133,7 +137,7 @@ func hit_enemy() -> void:
 		enemy_hit.emit(true)
 		notice.emit("¡TE CONTRAGOLPEÓ! No podés pegar un momento")
 		return
-	var dmg := player_punch_damage
+	var dmg := maxf(damage, 0.0)
 	if blocked:
 		dmg *= (1.0 - block_reduction)
 	enemy_health = maxf(enemy_health - dmg, 0.0)
