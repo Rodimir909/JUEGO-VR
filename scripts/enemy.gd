@@ -4,14 +4,14 @@ extends CharacterBody3D
 enum State { APPROACH, CIRCLE, WINDUP, RECOVER, BLOCK, DODGE, LUNGE }
 enum Attack { JAB, HEAVY, FEINT }
 
-const REST_R := Vector3(0.35, 1.2, -0.4)
-const REST_L := Vector3(-0.35, 1.2, -0.4)
-const GUARD_R := Vector3(0.12, 1.5, -0.45)
-const GUARD_L := Vector3(-0.12, 1.5, -0.45)
-const WINDUP_R := Vector3(0.45, 1.3, -0.1)
-const WINDUP_L := Vector3(-0.45, 1.3, -0.1)
-const PUNCH_R := Vector3(0.1, 1.4, -1.1)
-const PUNCH_L := Vector3(-0.1, 1.4, -1.1)
+const REST_R := Vector3.ZERO
+const REST_L := Vector3.ZERO
+const GUARD_R := Vector3(0.0, 0.0, 0.04)
+const GUARD_L := Vector3(0.0, 0.0, -0.04)
+const WINDUP_R := Vector3(-0.12, -0.08, 0.0)
+const WINDUP_L := Vector3(-0.12, 0.08, 0.0)
+const PUNCH_R := Vector3(0.48, 0.0, 0.0)
+const PUNCH_L := Vector3(0.48, 0.0, 0.0)
 const GLOVE_COLOR := Color(0.1, 0.1, 0.1)
 const HEAVY_COLOR := Color(1.0, 0.5, 0.05)
 const RAGE_COLOR := Color(1.0, 0.25, 0.25)
@@ -24,9 +24,11 @@ const RAGE_COLOR := Color(1.0, 0.25, 0.25)
 @export var heavy_damage := 2.2
 @export var rage_health := 40.0   # por debajo de esta vida entra en furia
 
-@onready var glove_r: MeshInstance3D = $GloveR
-@onready var glove_l: MeshInstance3D = $GloveL
-@onready var body: MeshInstance3D = $BoxerModel
+@onready var body: MeshInstance3D = $BoxerRig/BoxerBody
+@onready var arm_r: Node3D = $BoxerRig/ArmRightPivot
+@onready var arm_l: Node3D = $BoxerRig/ArmLeftPivot
+@onready var arm_r_mesh: MeshInstance3D = $BoxerRig/ArmRightPivot/ArmRightMesh
+@onready var arm_l_mesh: MeshInstance3D = $BoxerRig/ArmLeftPivot/ArmLeftMesh
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var base_diff := 1.0
@@ -57,6 +59,7 @@ var body_rest_scale := Vector3.ONE
 var idle_time := 0.0
 var flash_tween: Tween
 var body_pose_tween: Tween
+var arm_overlay: StandardMaterial3D
 var tweens: Dictionary = {}
 
 
@@ -65,6 +68,10 @@ func _ready() -> void:
 	base_diff = minf(1.25 + 0.25 * float(Global.round_number - 1), 2.0)
 	_update_difficulty()
 	body_rest_scale = body.scale
+	arm_overlay = StandardMaterial3D.new()
+	arm_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	arm_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	arm_overlay.albedo_color = Color(1.0, 0.5, 0.05, 0.35)
 	Global.enemy_hit.connect(_on_enemy_hit)
 	Global.enemy_died.connect(_on_died)
 	_set_state(State.RECOVER, 0.35)
@@ -281,9 +288,9 @@ func _strike() -> void:
 		Global.damage_player((heavy_damage if heavy else jab_damage) * mult, heavy)
 
 	var punching_left := use_left and not heavy
-	var glove := glove_l if punching_left else glove_r
-	var punch_pos := PUNCH_L if punching_left else PUNCH_R
-	var rest_pos := REST_L if punching_left else REST_R
+	var arm := arm_l if punching_left else arm_r
+	var punch_rotation := PUNCH_L if punching_left else PUNCH_R
+	var rest_rotation := REST_L if punching_left else REST_R
 
 	if combo_left > 0 and not heavy and Global.is_fighting():
 		combo_left -= 1
@@ -298,7 +305,7 @@ func _strike() -> void:
 		combo_left = 0
 		did_combo = false
 		_set_state(State.RECOVER, _w(base_recover) * (1.5 if heavy else 1.0))
-	_punch_glove(glove, punch_pos, rest_pos)
+	_punch_arm(arm, punch_rotation, rest_rotation)
 
 
 func _react_to_punch(dist: float) -> void:
@@ -395,41 +402,47 @@ func _set_state(new_state: State, duration: float) -> void:
 	_set_glove_color(HEAVY_COLOR if heavy else normal_color)
 	match new_state:
 		State.BLOCK:
-			_move_glove(glove_r, GUARD_R, 0.12)
-			_move_glove(glove_l, GUARD_L, 0.12)
+			_move_arm(arm_r, GUARD_R, 0.12)
+			_move_arm(arm_l, GUARD_L, 0.12)
 		State.WINDUP:
 			if attack == Attack.HEAVY or not use_left:
-				_move_glove(glove_r, WINDUP_R, duration)
-				_move_glove(glove_l, REST_L, 0.15)
+				_move_arm(arm_r, WINDUP_R, duration)
+				_move_arm(arm_l, REST_L, 0.15)
 			else:
-				_move_glove(glove_l, WINDUP_L, duration)
-				_move_glove(glove_r, REST_R, 0.15)
+				_move_arm(arm_l, WINDUP_L, duration)
+				_move_arm(arm_r, REST_R, 0.15)
 		_:
-			_move_glove(glove_r, REST_R, 0.2)
-			_move_glove(glove_l, REST_L, 0.2)
+			_move_arm(arm_r, REST_R, 0.2)
+			_move_arm(arm_l, REST_L, 0.2)
 	if heavy:
 		Global.notice.emit("¡GOLPE PESADO! ¡Alejate!")
 
 
-func _move_glove(g: MeshInstance3D, pos: Vector3, t: float) -> void:
-	if tweens.has(g.name):
-		(tweens[g.name] as Tween).kill()
+func _move_arm(arm: Node3D, target_rotation: Vector3, duration: float) -> void:
+	if tweens.has(arm.name):
+		(tweens[arm.name] as Tween).kill()
 	var tw := create_tween()
-	tw.tween_property(g, "position", pos, t)
-	tweens[g.name] = tw
+	tw.tween_property(arm, "rotation", target_rotation, duration)
+	tweens[arm.name] = tw
 
 
-func _punch_glove(g: MeshInstance3D, punch_pos: Vector3, rest_pos: Vector3) -> void:
-	if tweens.has(g.name):
-		(tweens[g.name] as Tween).kill()
+func _punch_arm(arm: Node3D, punch_rotation: Vector3, rest_rotation: Vector3) -> void:
+	if tweens.has(arm.name):
+		(tweens[arm.name] as Tween).kill()
 	var tw := create_tween()
-	tw.tween_property(g, "position", punch_pos, 0.07)
-	tw.tween_property(g, "position", rest_pos, 0.2)
-	tweens[g.name] = tw
+	tw.tween_property(arm, "rotation", punch_rotation, 0.07)
+	tw.tween_property(arm, "rotation", rest_rotation, 0.2)
+	tweens[arm.name] = tw
 
 
 func _set_glove_color(c: Color) -> void:
-	(glove_r.material_override as StandardMaterial3D).albedo_color = c
+	if c == GLOVE_COLOR:
+		arm_r_mesh.material_overlay = null
+		arm_l_mesh.material_overlay = null
+	else:
+		arm_overlay.albedo_color = Color(c.r, c.g, c.b, 0.35)
+		arm_r_mesh.material_overlay = arm_overlay
+		arm_l_mesh.material_overlay = arm_overlay
 
 
 func _flat_distance() -> float:
