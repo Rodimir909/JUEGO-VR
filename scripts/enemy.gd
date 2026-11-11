@@ -10,9 +10,11 @@ const GUARD_R := Vector3(0.0, -0.2, 0.0)
 const GUARD_L := Vector3(0.0, 0.2, 0.0)
 const WINDUP_R := Vector3(0.0, 0.18, 0.0)
 const WINDUP_L := Vector3(0.0, -0.18, 0.0)
-const JAB_R := Vector3(0.0, -0.64, 0.0)
-const JAB_L := Vector3(0.0, 0.64, 0.0)
-const HOOK_R := Vector3(0.0, -0.92, 0.0)
+const JAB_R := Vector3(0.0, -0.12, 0.0)
+const JAB_L := Vector3(0.0, 0.12, 0.0)
+const HOOK_R := Vector3(0.0, -1.0, 0.0)
+const JAB_ADVANCE := Vector3(0.0, 0.0, 0.75)
+const HOOK_ADVANCE := Vector3(-0.24, 0.0, 0.5)
 const GLOVE_COLOR := Color(0.1, 0.1, 0.1)
 const HEAVY_COLOR := Color(1.0, 0.5, 0.05)
 const RAGE_COLOR := Color(1.0, 0.25, 0.25)
@@ -25,7 +27,7 @@ const RAGE_COLOR := Color(1.0, 0.25, 0.25)
 @export var heavy_damage := 2.2
 @export var rage_health := 40.0   # por debajo de esta vida entra en furia
 
-@onready var body: MeshInstance3D = $BoxerRig/BoxerBody
+@onready var boxer_rig: Node3D = $BoxerRig
 @onready var arm_r: Node3D = $BoxerRig/ArmRightPivot
 @onready var arm_l: Node3D = $BoxerRig/ArmLeftPivot
 @onready var arm_r_mesh: MeshInstance3D = $BoxerRig/ArmRightPivot/ArmRightMesh
@@ -68,7 +70,7 @@ func _ready() -> void:
 	# Dificultad según el round (arranca más alta y sube más)
 	base_diff = minf(1.25 + 0.25 * float(Global.round_number - 1), 2.0)
 	_update_difficulty()
-	body_rest_scale = body.scale
+	body_rest_scale = boxer_rig.scale
 	arm_overlay = StandardMaterial3D.new()
 	arm_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	arm_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -291,6 +293,7 @@ func _strike() -> void:
 	var punching_left := use_left and not heavy
 	var arm := arm_l if punching_left else arm_r
 	var punch_rotation := HOOK_R if heavy else (JAB_L if punching_left else JAB_R)
+	var punch_advance := HOOK_ADVANCE if heavy else JAB_ADVANCE
 	var rest_rotation := REST_L if punching_left else REST_R
 
 	if combo_left > 0 and not heavy and Global.is_fighting():
@@ -306,7 +309,7 @@ func _strike() -> void:
 		combo_left = 0
 		did_combo = false
 		_set_state(State.RECOVER, _w(base_recover) * (1.5 if heavy else 1.0))
-	_punch_arm(arm, punch_rotation, rest_rotation)
+	_punch_arm(arm, punch_rotation, rest_rotation, punch_advance)
 
 
 func _react_to_punch(dist: float) -> void:
@@ -427,11 +430,11 @@ func _move_arm(arm: Node3D, target_rotation: Vector3, duration: float) -> void:
 	tweens[arm.name] = tw
 
 
-func _punch_arm(arm: Node3D, punch_rotation: Vector3, rest_rotation: Vector3) -> void:
+func _punch_arm(arm: Node3D, punch_rotation: Vector3, rest_rotation: Vector3, advance: Vector3) -> void:
 	if tweens.has(arm.name):
 		(tweens[arm.name] as Tween).kill()
 	var rest_position := arm.position
-	var punch_position := rest_position + Vector3(0.0, 0.0, 0.55)
+	var punch_position := rest_position + advance
 	var tw := create_tween()
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(arm, "rotation", punch_rotation, 0.07)
@@ -467,9 +470,9 @@ func _dir_to_player() -> Vector3:
 func _on_enemy_hit(blocked: bool) -> void:
 	if flash_tween:
 		flash_tween.kill()
-	body.scale = body_rest_scale * (1.02 if blocked else 1.05)
+	boxer_rig.scale = body_rest_scale * (1.02 if blocked else 1.05)
 	flash_tween = create_tween()
-	flash_tween.tween_property(body, "scale", body_rest_scale, 0.16)
+	flash_tween.tween_property(boxer_rig, "scale", body_rest_scale, 0.16)
 	# Un golpe limpio interrumpe el ataque, salvo el pesado (super armadura).
 	# Además, a mayor dificultad y en furia, a veces aguanta el golpe y sigue.
 	if not blocked and state == State.WINDUP and attack != Attack.HEAVY:
@@ -496,8 +499,8 @@ func _on_died() -> void:
 
 func _idle_animation(delta: float) -> void:
 	idle_time += delta
-	body.position.y = sin(idle_time * 4.0) * 0.018
-	body.rotation.z = sin(idle_time * 2.2) * 0.025
+	boxer_rig.position.y = sin(idle_time * 4.0) * 0.018
+	boxer_rig.rotation.z = sin(idle_time * 2.2) * 0.025
 
 
 func _animate_body_punch(heavy: bool) -> void:
@@ -505,5 +508,5 @@ func _animate_body_punch(heavy: bool) -> void:
 		body_pose_tween.kill()
 	body_pose_tween = create_tween()
 	var lean := deg_to_rad(5.0 if heavy else 2.5)
-	body_pose_tween.tween_property(body, "rotation:x", lean, 0.08)
-	body_pose_tween.tween_property(body, "rotation:x", 0.0, 0.18)
+	body_pose_tween.tween_property(boxer_rig, "rotation:x", lean, 0.08)
+	body_pose_tween.tween_property(boxer_rig, "rotation:x", 0.0, 0.18)
