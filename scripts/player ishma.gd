@@ -3,6 +3,7 @@ extends CharacterBody3D
 @export var speed := 6.0
 @export var mouse_sensitivity := 0.0025
 @export var punch_cooldown := 0.2
+@export var camera_tracking_speed := 4.0
 
 const REST_R := Vector3(0.3, -0.3, -0.6)
 const REST_L := Vector3(-0.3, -0.3, -0.6)
@@ -63,6 +64,7 @@ func _physics_process(delta: float) -> void:
 	velocity.z = wish.z
 	move_and_slide()
 	Global.player_position = global_position
+	_track_enemy(delta)
 
 	# Golpear: clic izquierdo = guante izquierdo, clic derecho = guante derecho
 	if fighting and can_punch and not Global.player_blocking and not stunned:
@@ -77,6 +79,23 @@ func _physics_process(delta: float) -> void:
 		glove_l.position = glove_l.position.lerp(GUARD_L if guard else REST_L, 15.0 * delta)
 	if glove_r != active_glove:
 		glove_r.position = glove_r.position.lerp(GUARD_R if guard else REST_R, 15.0 * delta)
+
+
+func _track_enemy(delta: float) -> void:
+	if Global.phase not in [Global.Phase.INTRO, Global.Phase.FIGHTING]:
+		return
+
+	var target := Global.enemy_position + Vector3.UP * 1.1
+	var to_enemy := target - head.global_position
+	var horizontal_distance := Vector2(to_enemy.x, to_enemy.z).length()
+	if horizontal_distance <= 0.01:
+		return
+
+	var target_yaw := atan2(-to_enemy.x, -to_enemy.z)
+	var target_pitch := clampf(atan2(to_enemy.y, horizontal_distance), deg_to_rad(-60.0), deg_to_rad(60.0))
+	var weight := clampf(camera_tracking_speed * delta, 0.0, 1.0)
+	rotation.y = lerp_angle(rotation.y, target_yaw, weight)
+	head.rotation.x = lerpf(head.rotation.x, target_pitch, weight)
 
 
 func _punch(left: bool) -> void:
