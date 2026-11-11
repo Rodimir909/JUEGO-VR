@@ -6,12 +6,13 @@ enum Attack { JAB, HEAVY, FEINT }
 
 const REST_R := Vector3.ZERO
 const REST_L := Vector3.ZERO
-const GUARD_R := Vector3(0.0, 0.0, 0.04)
-const GUARD_L := Vector3(0.0, 0.0, -0.04)
-const WINDUP_R := Vector3(-0.12, -0.08, 0.0)
-const WINDUP_L := Vector3(-0.12, 0.08, 0.0)
-const PUNCH_R := Vector3(0.48, 0.0, 0.0)
-const PUNCH_L := Vector3(0.48, 0.0, 0.0)
+const GUARD_R := Vector3(0.0, -0.2, 0.0)
+const GUARD_L := Vector3(0.0, 0.2, 0.0)
+const WINDUP_R := Vector3(0.0, 0.18, 0.0)
+const WINDUP_L := Vector3(0.0, -0.18, 0.0)
+const JAB_R := Vector3(0.0, -0.64, 0.0)
+const JAB_L := Vector3(0.0, 0.64, 0.0)
+const HOOK_R := Vector3(0.0, -0.92, 0.0)
 const GLOVE_COLOR := Color(0.1, 0.1, 0.1)
 const HEAVY_COLOR := Color(1.0, 0.5, 0.05)
 const RAGE_COLOR := Color(1.0, 0.25, 0.25)
@@ -289,7 +290,7 @@ func _strike() -> void:
 
 	var punching_left := use_left and not heavy
 	var arm := arm_l if punching_left else arm_r
-	var punch_rotation := PUNCH_L if punching_left else PUNCH_R
+	var punch_rotation := HOOK_R if heavy else (JAB_L if punching_left else JAB_R)
 	var rest_rotation := REST_L if punching_left else REST_R
 
 	if combo_left > 0 and not heavy and Global.is_fighting():
@@ -429,9 +430,15 @@ func _move_arm(arm: Node3D, target_rotation: Vector3, duration: float) -> void:
 func _punch_arm(arm: Node3D, punch_rotation: Vector3, rest_rotation: Vector3) -> void:
 	if tweens.has(arm.name):
 		(tweens[arm.name] as Tween).kill()
+	var rest_position := arm.position
+	var punch_position := rest_position + Vector3(0.0, 0.0, 0.55)
 	var tw := create_tween()
+	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(arm, "rotation", punch_rotation, 0.07)
+	tw.parallel().tween_property(arm, "position", punch_position, 0.07)
+	tw.set_ease(Tween.EASE_IN)
 	tw.tween_property(arm, "rotation", rest_rotation, 0.2)
+	tw.parallel().tween_property(arm, "position", rest_position, 0.2)
 	tweens[arm.name] = tw
 
 
@@ -497,6 +504,6 @@ func _animate_body_punch(heavy: bool) -> void:
 	if body_pose_tween and body_pose_tween.is_running():
 		body_pose_tween.kill()
 	body_pose_tween = create_tween()
-	var lean := deg_to_rad(10.0 if heavy else 5.0)
-	body_pose_tween.tween_property(body, "rotation:x", -lean, 0.08)
+	var lean := deg_to_rad(5.0 if heavy else 2.5)
+	body_pose_tween.tween_property(body, "rotation:x", lean, 0.08)
 	body_pose_tween.tween_property(body, "rotation:x", 0.0, 0.18)

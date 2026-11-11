@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const BLOOD_VIGNETTE_SHADER := preload("res://scripts/low_health_vignette.gdshader")
+
 @onready var overlay: ColorRect = $RedOverlay
 @onready var label: Label = $GameOverLabel   # mensaje central
 
@@ -9,9 +11,14 @@ var enemy_bar: ProgressBar
 var base_alpha := 0.0
 var flash := 0.0
 var notice_time := 0.0
+var blood_material: ShaderMaterial
 
 
 func _ready() -> void:
+	blood_material = ShaderMaterial.new()
+	blood_material.shader = BLOOD_VIGNETTE_SHADER
+	overlay.material = blood_material
+	overlay.color = Color.WHITE
 	label.visible = false
 	label.add_theme_constant_override("outline_size", 8)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -52,9 +59,7 @@ func _process(delta: float) -> void:
 	var target: float = 1.0 - Global.player_health / Global.MAX_HEALTH
 	base_alpha = move_toward(base_alpha, target, delta * 1.2)
 	flash = move_toward(flash, 0.0, delta * 1.5)
-	var c := overlay.color
-	c.a = clampf(base_alpha + flash, 0.0, 1.0)
-	overlay.color = c
+	blood_material.set_shader_parameter("intensity", clampf(base_alpha + flash, 0.0, 1.0))
 
 	var t := int(ceilf(Global.round_time_left))
 	info_label.text = "ROUND %d   |   VOS %d - %d ENEMIGO   |   %d:%02d" % [
