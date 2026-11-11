@@ -27,6 +27,7 @@ signal cursor_updated(pos: Vector2, hand_visible: bool, pinch: bool)  # pos norm
 
 @export_group("Red")
 @export var udp_port := 4242
+@export var debug_tracking_angle := false
 
 @export_group("Camara - rotacion")
 # Se multiplica el giro real de tu cabeza: como miras la pantalla, giros poco.
@@ -211,7 +212,8 @@ func _physics_process(_delta: float) -> void:
 	$Head/RayCast3D.target_position=Global.enemy_position
 	
 	var tangente := atan2($Head/RayCast3D.target_position.x, $Head/RayCast3D.target_position.z)
-	print (rad_to_deg(tangente))
+	if debug_tracking_angle:
+		print(rad_to_deg(tangente))
 	rotation_degrees.y = rad_to_deg(tangente)-180
 # ---------------------------------------------------------------------
 # Lectura del paquete

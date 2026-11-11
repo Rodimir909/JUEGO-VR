@@ -19,6 +19,7 @@ const PUNCH_L := Vector3(-0.05, -0.1, -1.1)
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var can_punch := true
+var punch_cooldown_remaining := 0.0
 var punch_tween: Tween
 var active_glove: MeshInstance3D = null
 
@@ -40,6 +41,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not can_punch:
+		punch_cooldown_remaining = maxf(punch_cooldown_remaining - delta, 0.0)
+		can_punch = punch_cooldown_remaining == 0.0
+
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	else:
@@ -100,8 +105,8 @@ func _track_enemy(delta: float) -> void:
 
 func _punch(left: bool) -> void:
 	can_punch = false
+	punch_cooldown_remaining = punch_cooldown
 	Global.player_punching = true
-	get_tree().create_timer(punch_cooldown).timeout.connect(func(): can_punch = true)
 	var glove := glove_l if left else glove_r
 	var punch_pos := PUNCH_L if left else PUNCH_R
 	var rest_pos := REST_L if left else REST_R
@@ -121,7 +126,7 @@ func _punch_finished() -> void:
 
 
 func _check_hit() -> void:
-	ray.force_raycast_update()
+	# RayCast3D ya actualiza su resultado en cada tick de física.
 	if ray.is_colliding():
 		var target := ray.get_collider()
 		if target and target.is_in_group("enemy"):
