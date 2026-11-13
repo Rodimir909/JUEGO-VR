@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://bf3rvsdt0axr5" path="res://player/player.gd" id="1_oul6g"]
 [ext_resource type="PackedScene" uid="uid://dxlpgc8bq0gqh" path="res://elementos de hud/pause_menu.tscn" id="2_pause"]
+[ext_resource type="PackedScene" uid="uid://d2k3iwwfcgklu" path="res://guantes_derecho.glb" id="2_yw30f"]
+[ext_resource type="PackedScene" uid="uid://b88uhoyic66kf" path="res://guantes_izquierdo.glb" id="3_qjkh3"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_oul6g"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -19,28 +21,10 @@ sky = SubResource("Sky_rkbax")
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_cjdqc"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_cjdqc"]
-radius = 0.12
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_right"]
-albedo_color = Color(0.85, 0.1, 0.1, 1)
-roughness = 0.5
-
-[sub_resource type="SphereMesh" id="SphereMesh_0eft3"]
-material = SubResource("StandardMaterial3D_right")
-radius = 0.12
-height = 0.24
+radius = 0.2
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_oaqsx"]
-radius = 0.12
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_left"]
-albedo_color = Color(0.1, 0.25, 0.85, 1)
-roughness = 0.5
-
-[sub_resource type="SphereMesh" id="SphereMesh_xhdhp"]
-material = SubResource("StandardMaterial3D_left")
-radius = 0.12
-height = 0.24
+radius = 0.2
 
 [node name="Player" type="CharacterBody3D" unique_id=1988186890]
 script = ExtResource("1_oul6g")
@@ -53,6 +37,7 @@ transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545
 shadow_enabled = true
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=361518633]
+visible = false
 mesh = SubResource("CapsuleMesh_cjdqc")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1950674586]
@@ -73,8 +58,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, 0.55, -0.4)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="RightGlove" unique_id=1311153534]
 shape = SubResource("SphereShape3D_cjdqc")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="RightGlove" unique_id=1112325352]
-mesh = SubResource("SphereMesh_0eft3")
+[node name="guantes_derecho" parent="RightGlove" unique_id=507597877 instance=ExtResource("2_yw30f")]
+transform = Transform3D(2.8660284e-16, 6.5567085e-09, -0.15, 0.15, -6.5567085e-09, 0, -6.5567085e-09, -0.15, -6.5567085e-09, 0.0107040405, -0.07795292, 0.15743795)
 
 [node name="LeftGlove" type="Area3D" parent="." unique_id=1318816949 groups=["puño"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, 0.55, -0.4)
@@ -82,7 +67,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, 0.55, -0.4)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="LeftGlove" unique_id=917255806]
 shape = SubResource("SphereShape3D_oaqsx")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="LeftGlove" unique_id=56206139]
-mesh = SubResource("SphereMesh_xhdhp")
+[node name="guantes_izquierdo" parent="LeftGlove" unique_id=1774280866 instance=ExtResource("3_qjkh3")]
+transform = Transform3D(2.8660284e-16, 6.5567085e-09, -0.15, 0.15, -6.5567085e-09, 0, -6.5567085e-09, -0.15, -6.5567085e-09, 0.5932808, -0.071343005, 0.15511322)
 
 [node name="PauseMenu" parent="." unique_id=350889864 instance=ExtResource("2_pause")]
