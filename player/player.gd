@@ -3,6 +3,7 @@ extends CharacterBody3D
 # =====================================================================
 # Jugador en PRIMERA PERSONA controlado por webcam (MediaPipe via UDP)
 #   - Brazos   -> guantes + FUERZA de cada piña (velocidad del guante)
+#   - Manos    -> la ROTACION de tu mano rota el guante (podes inspeccionarlo de todos lados)
 #   - Cabeza   -> rotacion de camara + esquivar/agacharse
 #   - Guardia  -> manos en la cara = invulnerable a golpes
 #   - Pausa    -> mano arriba ~1 s = pausa; en el menu la mano mueve un cursor
@@ -27,7 +28,6 @@ signal cursor_updated(pos: Vector2, hand_visible: bool, pinch: bool)  # pos norm
 
 @export_group("Red")
 @export var udp_port := 4242
-@export var debug_tracking_angle := false
 
 @export_group("Camara - rotacion")
 # Se multiplica el giro real de tu cabeza: como miras la pantalla, giros poco.
@@ -70,6 +70,20 @@ signal cursor_updated(pos: Vector2, hand_visible: bool, pinch: bool)  # pos norm
 @export var glove_limit_min := Vector3(-0.9, -0.7, -1.3)
 @export var glove_limit_max := Vector3(0.9, 0.7, 0.2)
 
+@export_group("Guantes - rotacion")
+# Con la mano en guardia (dedos hacia la pantalla, pulgar arriba) el guante tiene rotacion (0,0,0).
+# El modelo ya debe apuntar hacia adelante (-Z) con la rotacion de su nodo hijo; aca solo se agrega la de tu mano.
+@export var rotate_gloves := true
+@export var rotate_around_model_center := true   # el guante gira sobre su centro (no sobre el origen del Area3D)
+@export var auto_center_models := true           # al iniciar, mueve cada modelo para que su CENTRO quede en glove_visual_center
+@export var glove_visual_center := Vector3(0.0, -0.04, 0.09)   # metros, relativo al Area3D (el origen es la punta del puño)
+@export var rotation_gain := 1.0               # 1 = igual que tu mano; 0.5 = mitad de giro
+@export var rotation_smoothing := 25.0         # mas alto = mas rapido y mas ruido
+@export var max_glove_angle := 150.0           # grados maximos respecto a la guardia
+@export var rotation_lost_timeout := 0.3       # seg sin ver la mano antes de volver a la guardia
+@export var left_rotation_offset := Vector3.ZERO    # grados, para corregir un modelo mal orientado
+@export var right_rotation_offset := Vector3.ZERO
+
 @export_group("Piñas - fuerza")
 # La fuerza sale de la VELOCIDAD del guante (m/s de juego), medida con los tiempos reales de Python.
 @export var punch_start_speed := 1.8    # por encima de esto arranca una piña (y es fuerza 0)
@@ -98,13 +112,21 @@ const PACKET_TIMEOUT := 0.5    # seg sin paquetes = Python caido / sin tracking
 @onready var left_glove: Area3D = $LeftGlove
 @onready var right_glove: Area3D = $RightGlove
 @onready var head: Node3D = $Head
-@onready var camera: Camera3D = $Head/Camera3D
+@onready var camera: Camera3D = $Head.find_child("Camera3D", true, false) as Camera3D
 
 var udp := PacketPeerUDP.new()
 
 var left_target := Vector3.ZERO
 var right_target := Vector3.ZERO
 var left_lost := 0.0
+var left_base := Vector3.ZERO     # posicion suavizada del guante (sin compensar el pivote)
+var right_base := Vector3.ZERO
+var left_pivot := Vector3.ZERO    # centro del modelo respecto al origen del Area3D
+var right_pivot := Vector3.ZERO
+var left_rot_target := Quaternion.IDENTITY
+var right_rot_target := Quaternion.IDENTITY
+var left_rot_lost := 0.0
+var right_rot_lost := 0.0
 var right_lost := 0.0
 
 var head_rest := Vector3.ZERO
@@ -114,7 +136,7 @@ var head_lost := 0.0
 
 var packet_age := 0.0
 var health := 0.0
-
+var guarding := false
 
 var pause_pose := false
 var pause_hold := 0.0
@@ -158,6 +180,10 @@ func _ready() -> void:
 	left_target = left_rest
 	right_target = right_rest
 	left_glove.position = left_rest
+	left_base = left_rest
+	right_base = right_rest
+	left_pivot = _setup_glove_model(left_glove)
+	right_pivot = _setup_glove_model(right_glove)
 	right_glove.position = right_rest
 
 
@@ -172,6 +198,8 @@ func _process(delta: float) -> void:
 
 	packet_age += delta
 	left_lost += delta
+	left_rot_lost += delta
+	right_rot_lost += delta
 	right_lost += delta
 	head_lost += delta
 
@@ -187,13 +215,16 @@ func _process(delta: float) -> void:
 		left_target = left_rest
 	if right_lost > lost_timeout:
 		right_target = right_rest
+	if left_rot_lost > rotation_lost_timeout:
+		left_rot_target = Quaternion.IDENTITY
+	if right_rot_lost > rotation_lost_timeout:
+		right_rot_target = Quaternion.IDENTITY
 	if head_lost > 0.6:
 		head_target_pos = head_rest
 		head_target_rot = Vector3.ZERO
 
 	_tick_punches(delta)
 	_update_pause_gesture(delta)
-	
 
 	# En pausa el cuerpo queda congelado; solo seguimos leyendo la webcam (para el cursor)
 	if get_tree().paused:
@@ -208,13 +239,8 @@ func _physics_process(_delta: float) -> void:
 		return
 	_check_hits("left", left_glove)
 	_check_hits("right", right_glove)
-	Global.player_position = global_position
-	$Head/RayCast3D.target_position=Global.enemy_position
-	
-	var tangente := atan2($Head/RayCast3D.target_position.x, $Head/RayCast3D.target_position.z)
-	if debug_tracking_angle:
-		print(rad_to_deg(tangente))
-	rotation_degrees.y = rad_to_deg(tangente)-180
+
+
 # ---------------------------------------------------------------------
 # Lectura del paquete
 # ---------------------------------------------------------------------
@@ -254,6 +280,17 @@ func _read_packet(data: Dictionary) -> void:
 		_track_punch("right", r, t)
 	else:
 		_reset_punch("right")
+
+	var orient: Variant = data.get("orient")
+	if typeof(orient) == TYPE_DICTIONARY:
+		var lq: Variant = _hand_rotation(orient.get("left"), left_rotation_offset)
+		if lq != null:
+			left_rot_target = lq
+			left_rot_lost = 0.0
+		var rq: Variant = _hand_rotation(orient.get("right"), right_rotation_offset)
+		if rq != null:
+			right_rot_target = rq
+			right_rot_lost = 0.0
 
 	_read_head(data.get("head"))
 
@@ -295,6 +332,46 @@ func _arm_target(arm: Variant, anchor: Vector3) -> Variant:
 	offset = offset.clamp(glove_limit_min, glove_limit_max)
 
 	return anchor + offset
+
+
+# Python manda dos ejes de la mano en espacio de juego (x derecha, y arriba, z hacia tu cuerpo):
+#   f = hacia donde apuntan los dedos (muneca -> nudillo del medio)
+#   s = a lo ancho de los nudillos (indice -> menique)
+# En guardia f = -Z (hacia la pantalla) y s = -Y (menique abajo): ahi la rotacion es identidad.
+func _hand_rotation(o: Variant, offset_deg: Vector3) -> Variant:
+	if typeof(o) != TYPE_DICTIONARY or not o.has("f") or not o.has("s"):
+		return null
+	var fa: Array = o["f"]
+	var sa: Array = o["s"]
+	if fa.size() < 3 or sa.size() < 3:
+		return null
+
+	var f := Vector3(float(fa[0]), float(fa[1]), float(fa[2]))
+	var s := Vector3(float(sa[0]), float(sa[1]), float(sa[2]))
+	if f.length_squared() < 0.0001 or s.length_squared() < 0.0001:
+		return null
+	f = f.normalized()
+
+	# "arriba" del guante = lado del pulgar = opuesto a s, ortogonalizado contra f
+	var up := -s
+	up = up - f * up.dot(f)
+	if up.length_squared() < 0.01:    # dedos y nudillos casi paralelos: medicion invalida
+		return null
+	up = up.normalized()
+
+	var back := -f
+	var hand_basis := Basis(up.cross(back), up, back).orthonormalized()
+	var q := hand_basis.get_rotation_quaternion()
+
+	# ganancia y limite de angulo (respecto a la guardia)
+	q = Quaternion.IDENTITY.slerp(q, clampf(rotation_gain, 0.0, 1.0)) if rotation_gain < 1.0 else q
+	var max_a := deg_to_rad(max_glove_angle)
+	if q.get_angle() > max_a:
+		q = Quaternion.IDENTITY.slerp(q, max_a / q.get_angle())
+
+	if offset_deg != Vector3.ZERO:
+		q = q * Quaternion.from_euler(Vector3(deg_to_rad(offset_deg.x), deg_to_rad(offset_deg.y), deg_to_rad(offset_deg.z)))
+	return q
 
 
 func _read_head(h: Variant) -> void:
@@ -446,9 +523,9 @@ func _check_hits(side: String, glove: Area3D) -> void:
 # ---------------------------------------------------------------------
 
 func _set_guard(active: bool) -> void:
-	if active == Global.player_blocking:
+	if active == guarding:
 		return
-	Global.player_blocking = active
+	guarding = active
 	if guard_glow:
 		_set_glove_glow(left_glove, active)
 		_set_glove_glow(right_glove, active)
@@ -456,20 +533,25 @@ func _set_guard(active: bool) -> void:
 
 
 func _set_glove_glow(glove: Node3D, on: bool) -> void:
-	var mi := glove.get_node_or_null("MeshInstance3D") as MeshInstance3D
-	if mi == null or not (mi.mesh is PrimitiveMesh):
-		return
-	var mat := (mi.mesh as PrimitiveMesh).material as StandardMaterial3D
-	if mat == null:
-		return
-	mat.emission_enabled = on
-	mat.emission = mat.albedo_color
-	mat.emission_energy_multiplier = 0.8
+	# Los guantes son modelos .glb (varios MeshInstance3D): un material "overlay" translucido y brillante
+	# encima de cada uno, sin tocar sus texturas.
+	for node in glove.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if on:
+			var mat := StandardMaterial3D.new()
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.albedo_color = Color(1.0, 1.0, 1.0, 0.18)
+			mat.emission_enabled = true
+			mat.emission = Color(1.0, 0.85, 0.3)
+			mat.emission_energy_multiplier = 0.8
+			mi.material_overlay = mat
+		else:
+			mi.material_overlay = null
 
 
 # Los enemigos llaman a esto. Devuelve true si el golpe fue bloqueado por completo.
 func take_hit(damage: float, attacker: Node = null) -> bool:
-	if Global.player_blocking:
+	if guarding:
 		blocked.emit(damage, attacker)
 		damage *= guard_damage_multiplier
 		if damage <= 0.0:
@@ -517,10 +599,48 @@ func _update_pause_gesture(delta: float) -> void:
 # Actualizacion (independiente de los FPS)
 # ---------------------------------------------------------------------
 
+# Caja (en espacio del Area3D) que ocupan todas las mallas del guante.
+func _model_bounds(glove: Node3D) -> Variant:
+	var inv := glove.global_transform.affine_inverse()
+	var box := AABB()
+	var found := false
+	for node in glove.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		var b: AABB = (inv * mi.global_transform) * mi.get_aabb()
+		box = b if not found else box.merge(b)
+		found = true
+	return box if found else null
+
+
+# Los .glb no traen el origen en el centro (el izquierdo ademas viene espejado y desplazado), asi que
+# se mide la malla real: se centra en glove_visual_center y ese centro es el pivote de la rotacion.
+func _setup_glove_model(glove: Node3D) -> Vector3:
+	var bounds: Variant = _model_bounds(glove)
+	if bounds == null:
+		return Vector3.ZERO
+	var center: Vector3 = (bounds as AABB).get_center()
+	if auto_center_models:
+		for child in glove.get_children():
+			if child is Node3D and not (child is CollisionShape3D):
+				(child as Node3D).position += glove_visual_center - center
+				center = glove_visual_center
+				break
+	return center if rotate_around_model_center else Vector3.ZERO
+
+
 func _update_gloves(delta: float) -> void:
 	var w := 1.0 - exp(-glove_smoothing * delta)
-	left_glove.position = left_glove.position.lerp(left_target, w)
-	right_glove.position = right_glove.position.lerp(right_target, w)
+	left_base = left_base.lerp(left_target, w)
+	right_base = right_base.lerp(right_target, w)
+
+	if rotate_gloves:
+		var wr := 1.0 - exp(-rotation_smoothing * delta)
+		left_glove.quaternion = left_glove.quaternion.slerp(left_rot_target, wr)
+		right_glove.quaternion = right_glove.quaternion.slerp(right_rot_target, wr)
+
+	# Compensa la rotacion para que el centro del guante no se mueva (sin esto orbita alrededor del origen)
+	left_glove.position = left_base + left_pivot - left_glove.quaternion * left_pivot
+	right_glove.position = right_base + right_pivot - right_glove.quaternion * right_pivot
 
 
 func _update_head(delta: float) -> void:

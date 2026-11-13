@@ -67,6 +67,10 @@ CURSOR_BETA = 4.0           # mas alto = menos lag cuando la mano va rapido
 PINCH_ON = 0.30             # pulgar-indice mas juntos que esto (relativo al tamano de la mano) = click
 PINCH_OFF = 0.45            # hasta que no se separen mas que esto no se "suelta" el click
 
+# --- Orientacion de las manos (los guantes rotan como tus manos) ---
+ORIENT_MIN_CUTOFF = 1.0     # filtro One Euro de los ejes de la mano: mas bajo = mas estable
+ORIENT_BETA = 2.0           # mas alto = menos lag cuando giras la mano rapido
+
 # =====================================
 # CONEXION CON GODOT
 # =====================================
@@ -372,6 +376,20 @@ def hand_at_face(w, nose, mid_shoulder_y, shoulder_px, width, height):
     return d < GUARD_MAX_DIST
 
 
+def unit_vec(v):
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    if n < 1e-6:
+        return None
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+# 6 filtros por mano: componentes (x, y, z) de "f" (hacia donde apuntan los dedos) y "s" (a lo ancho de los nudillos)
+orient_filters = {
+    side: [OneEuro(ORIENT_MIN_CUTOFF, ORIENT_BETA) for _ in range(6)]
+    for side in ("left", "right")
+}
+
+
 def pick_hand(results, wrist, width, height, max_dist_px):
     """Elige la mano de Holistic mas cercana a una muneca de pose (no depende de las etiquetas left/right)."""
     best, best_d = None, max_dist_px
@@ -422,6 +440,7 @@ try:
             arm_data = {}
             guard_now = False
             pause_pose = False
+            orient_data = {}
             cursor_data = {"x": 0.5, "y": 0.5, "visible": False, "pinch": False}
 
             if results.pose_landmarks:
@@ -551,6 +570,34 @@ try:
                         }
                         break
 
+                    # --- ORIENTACION DE CADA MANO ---
+                    # Ejes en espacio de juego: x = tu derecha, y = arriba, z = hacia tu cuerpo
+                    # (igual que "rel"). f = muneca -> base del dedo medio, s = indice -> menique.
+                    for oside in ("left", "right"):
+                        pw = lm[sides[oside][2]]
+                        if pw.visibility < 0.5:
+                            continue
+                        ohand = pick_hand(results, pw, width, height, shoulder_px * 0.6)
+                        if ohand is None:
+                            continue
+                        hl = ohand.landmark
+
+                        def axis(a, b):
+                            return unit_vec((
+                                (hl[b].x - hl[a].x) * width,
+                                -(hl[b].y - hl[a].y) * height,
+                                (hl[b].z - hl[a].z) * width
+                            ))
+
+                        f_vec, s_vec = axis(0, 9), axis(5, 17)
+                        if f_vec is None or s_vec is None:
+                            continue
+                        fl = orient_filters[oside]
+                        orient_data[oside] = {
+                            "f": [round(fl[i](f_vec[i], frame_t), 4) for i in range(3)],
+                            "s": [round(fl[3 + i](s_vec[i], frame_t), 4) for i in range(3)]
+                        }
+
                 # Dibujar solamente los brazos
                 connections = [(11, 13), (13, 15), (12, 14), (14, 16)]
 
@@ -566,6 +613,11 @@ try:
                         (0, 255, 0),
                         3
                     )
+
+            for oside, ofl in orient_filters.items():
+                if oside not in orient_data:
+                    for fil in ofl:
+                        fil.reset()
 
             guard_state = guard_deb.update(guard_now)
             pause_state = pause_deb.update(pause_pose)
@@ -740,6 +792,7 @@ try:
                 "right": arm_data.get("right", {}),
                 "hands": hand_data,
                 "head": head_data,
+                "orient": orient_data,
                 "guard": guard_state,
                 "pause_pose": pause_state,
                 "cursor": cursor_data

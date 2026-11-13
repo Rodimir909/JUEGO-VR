@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://k43ygpd7bsjq"
-path.s3tc="res://.godot/imported/guante derecho_0.jpg-81451292e58cf87e50d292401a454b19.s3tc.ctex"
+uid="uid://dqmkeexjaalwm"
+path.s3tc="res://.godot/imported/guantes_izquierdo_Guante UVs izquierdo.png-3165bc7a70a5fd4a8c5e7b30b2e9115a.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "3c17f9a7ba0e605631b6d210d3bd18fd"
+"md5": "a4e5d7daa5354f91f7a1a308bee90459"
 }
 
 [deps]
 
-source_file="res://player/guante derecho_0.jpg"
-dest_files=["res://.godot/imported/guante derecho_0.jpg-81451292e58cf87e50d292401a454b19.s3tc.ctex"]
+source_file="res://player/guantes_izquierdo_Guante UVs izquierdo.png"
+dest_files=["res://.godot/imported/guantes_izquierdo_Guante UVs izquierdo.png-3165bc7a70a5fd4a8c5e7b30b2e9115a.s3tc.ctex"]
 
 [params]
 

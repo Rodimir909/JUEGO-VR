@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b88uhoyic66kf"
-path="res://.godot/imported/guantes_izquierdo.glb-0812858006a2f5a0bf3d5739d0aa3a84.scn"
+uid="uid://d2k3iwwfcgklu"
+path="res://.godot/imported/guantes_derecho.glb-bcb23e3ca68b7763195f27180e3e9bcb.scn"
 
 [deps]
 
-source_file="res://guantes_izquierdo.glb"
-dest_files=["res://.godot/imported/guantes_izquierdo.glb-0812858006a2f5a0bf3d5739d0aa3a84.scn"]
+source_file="res://player/guantes_derecho.glb"
+dest_files=["res://.godot/imported/guantes_derecho.glb-bcb23e3ca68b7763195f27180e3e9bcb.scn"]
 
 [params]
 
