@@ -51,6 +51,22 @@ MAX_REJECT_STREAK = 6           # tras tantos frames rechazados seguidos se acep
 # Pulsa T para calibrar brazos Y cabeza (T-pose, brazos abiertos, mirando a la pantalla)
 # Pulsa C en la ventana para recalibrar la cabeza (ponte en guardia mirando la pantalla)
 
+# --- Guardia (manos en la cara = Godot te hace invulnerable) ---
+GUARD_MAX_DIST = 0.8        # distancia muneca-nariz (en anchos de hombros) para contar como "mano en la cara"
+GUARD_ENTER_FRAMES = 3      # frames seguidos en guardia para activarla
+GUARD_EXIT_FRAMES = 3       # frames seguidos sin guardia para soltarla
+
+# --- Gesto de pausa: una muneca bien arriba de la cabeza (Godot exige mantenerlo ~1 s) ---
+PAUSE_RAISE = 0.8           # cuanto debe estar la muneca POR ENCIMA de la nariz (anchos de hombros)
+
+# --- Cursor con la mano (menu de pausa) ---
+CURSOR_HAND = "right"       # mano preferida; si no se ve, usa la otra
+CURSOR_REGION = (0.20, 0.80, 0.10, 0.80)   # zona del frame (x0, x1, y0, y1) que cubre TODA la pantalla del juego
+CURSOR_MIN_CUTOFF = 1.5     # filtro One Euro del cursor: mas bajo = mas estable
+CURSOR_BETA = 4.0           # mas alto = menos lag cuando la mano va rapido
+PINCH_ON = 0.30             # pulgar-indice mas juntos que esto (relativo al tamano de la mano) = click
+PINCH_OFF = 0.45            # hasta que no se separen mas que esto no se "suelta" el click
+
 # =====================================
 # CONEXION CON GODOT
 # =====================================
@@ -321,6 +337,53 @@ def foreshortening_depth(length, seen):
     return math.sqrt(max(0.0, length * length - seen * seen))
 
 
+class Debounce:
+    """Un booleano que solo cambia tras N frames seguidos con el valor nuevo (anti-parpadeo)."""
+
+    def __init__(self, on_frames, off_frames):
+        self.on_frames = on_frames
+        self.off_frames = off_frames
+        self.state = False
+        self.count = 0
+
+    def update(self, value):
+        if value == self.state:
+            self.count = 0
+        else:
+            self.count += 1
+            if self.count >= (self.on_frames if value else self.off_frames):
+                self.state = value
+                self.count = 0
+        return self.state
+
+
+guard_deb = Debounce(GUARD_ENTER_FRAMES, GUARD_EXIT_FRAMES)
+pause_deb = Debounce(3, 3)
+cursor_fx = OneEuro(CURSOR_MIN_CUTOFF, CURSOR_BETA)
+cursor_fy = OneEuro(CURSOR_MIN_CUTOFF, CURSOR_BETA)
+pinching = False
+
+
+def hand_at_face(w, nose, mid_shoulder_y, shoulder_px, width, height):
+    """True si la muneca esta cerca de la nariz y por encima de la linea de hombros."""
+    if w.visibility < 0.5 or w.y > mid_shoulder_y:
+        return False
+    d = math.hypot((w.x - nose.x) * width, (w.y - nose.y) * height) / shoulder_px
+    return d < GUARD_MAX_DIST
+
+
+def pick_hand(results, wrist, width, height, max_dist_px):
+    """Elige la mano de Holistic mas cercana a una muneca de pose (no depende de las etiquetas left/right)."""
+    best, best_d = None, max_dist_px
+    for hand in (results.left_hand_landmarks, results.right_hand_landmarks):
+        if hand:
+            h0 = hand.landmark[0]
+            d = math.hypot((h0.x - wrist.x) * width, (h0.y - wrist.y) * height)
+            if d < best_d:
+                best, best_d = hand, d
+    return best
+
+
 try:
     with mp_holistic.Holistic(
         static_image_mode=False,
@@ -338,6 +401,7 @@ try:
             if not ok_frame:
                 break
 
+            frame_t = time.perf_counter()   # momento en que llego el frame (Godot lo usa para medir velocidad)
             frame = cv2.flip(frame, 1)   # vista espejo
             height, width, _ = frame.shape
 
@@ -356,6 +420,9 @@ try:
             #   rel.z : - = hacia la pantalla (golpe), + = hacia tu cuerpo
 
             arm_data = {}
+            guard_now = False
+            pause_pose = False
+            cursor_data = {"x": 0.5, "y": 0.5, "visible": False, "pinch": False}
 
             if results.pose_landmarks:
 
@@ -446,6 +513,44 @@ try:
                             }
                         }
 
+                    # --- GUARDIA / PAUSA (nariz vs munecas) ---
+                    nose = lm[0]
+                    if nose.visibility > 0.5:
+                        mid_sh_y = (ls.y + rs.y) / 2.0
+                        guard_now = (
+                            hand_at_face(lm[15], nose, mid_sh_y, shoulder_px, width, height)
+                            and hand_at_face(lm[16], nose, mid_sh_y, shoulder_px, width, height)
+                        )
+                        for wrist_lm in (lm[15], lm[16]):
+                            if wrist_lm.visibility > 0.3 and (nose.y - wrist_lm.y) * height / shoulder_px > PAUSE_RAISE:
+                                pause_pose = True
+
+                    # --- CURSOR: palma de la mano preferida (o la muneca si no se detecta la mano) ---
+                    other_hand = "left" if CURSOR_HAND == "right" else "right"
+                    for cside in (CURSOR_HAND, other_hand):
+                        pw = lm[sides[cside][2]]
+                        if pw.visibility < 0.5:
+                            continue
+                        hand = pick_hand(results, pw, width, height, shoulder_px * 0.6)
+                        if hand is not None:
+                            hl = hand.landmark
+                            cx, cy = hl[9].x, hl[9].y       # base del dedo medio: estable al pellizcar
+                            palm = max(math.hypot((hl[9].x - hl[0].x) * width, (hl[9].y - hl[0].y) * height), 1.0)
+                            pinch_d = math.hypot((hl[4].x - hl[8].x) * width, (hl[4].y - hl[8].y) * height) / palm
+                            pinching = pinch_d < (PINCH_OFF if pinching else PINCH_ON)
+                        else:
+                            cx, cy = pw.x, pw.y
+                            pinching = False
+                        nx = clamp((cx - CURSOR_REGION[0]) / (CURSOR_REGION[1] - CURSOR_REGION[0]), 0.0, 1.0)
+                        ny = clamp((cy - CURSOR_REGION[2]) / (CURSOR_REGION[3] - CURSOR_REGION[2]), 0.0, 1.0)
+                        cursor_data = {
+                            "x": round(cursor_fx(nx, frame_t), 4),
+                            "y": round(cursor_fy(ny, frame_t), 4),
+                            "visible": True,
+                            "pinch": pinching
+                        }
+                        break
+
                 # Dibujar solamente los brazos
                 connections = [(11, 13), (13, 15), (12, 14), (14, 16)]
 
@@ -461,6 +566,14 @@ try:
                         (0, 255, 0),
                         3
                     )
+
+            guard_state = guard_deb.update(guard_now)
+            pause_state = pause_deb.update(pause_pose)
+
+            if not cursor_data["visible"]:
+                cursor_fx.reset()
+                cursor_fy.reset()
+                pinching = False
 
             for side, f in z_filters.items():
                 if side not in arm_data:
@@ -601,15 +714,35 @@ try:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2
             )
 
+            # Overlay: zona del cursor, guardia y gesto de pausa
+            cv2.rectangle(
+                frame,
+                (int(CURSOR_REGION[0] * width), int(CURSOR_REGION[2] * height)),
+                (int(CURSOR_REGION[1] * width), int(CURSOR_REGION[3] * height)),
+                (90, 90, 90), 1
+            )
+            if cursor_data["visible"]:
+                cpx = int((CURSOR_REGION[0] + cursor_data["x"] * (CURSOR_REGION[1] - CURSOR_REGION[0])) * width)
+                cpy = int((CURSOR_REGION[2] + cursor_data["y"] * (CURSOR_REGION[3] - CURSOR_REGION[2])) * height)
+                cv2.circle(frame, (cpx, cpy), 10, (0, 255, 255), -1 if cursor_data["pinch"] else 2)
+            if guard_state:
+                cv2.putText(frame, "GUARDIA", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            if pause_state:
+                cv2.putText(frame, "MANO ARRIBA (pausa)", (10, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+
             # =====================================
             # ENVIAR DATOS A GODOT
             # =====================================
 
             packet = {
+                "t": round(frame_t, 4),          # segundos (reloj de Python): Godot calcula velocidades con esto
                 "left": arm_data.get("left", {}),
                 "right": arm_data.get("right", {}),
                 "hands": hand_data,
-                "head": head_data
+                "head": head_data,
+                "guard": guard_state,
+                "pause_pose": pause_state,
+                "cursor": cursor_data
             }
 
             sock.sendto(
