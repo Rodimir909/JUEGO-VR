@@ -28,6 +28,7 @@ signal cursor_updated(pos: Vector2, hand_visible: bool, pinch: bool)  # pos norm
 
 @export_group("Red")
 @export var udp_port := 4242
+@export var debug_tracking_angle := false   # imprime el angulo hacia el enemigo
 
 @export_group("Camara - rotacion")
 # Se multiplica el giro real de tu cabeza: como miras la pantalla, giros poco.
@@ -136,7 +137,12 @@ var head_lost := 0.0
 
 var packet_age := 0.0
 var health := 0.0
-var guarding := false
+# La guardia vive en Global.player_blocking (lo leen los enemigos); `guarding` es solo un atajo.
+var guarding: bool:
+	get:
+		return Global.player_blocking
+	set(value):
+		Global.player_blocking = value
 
 var pause_pose := false
 var pause_hold := 0.0
@@ -239,6 +245,15 @@ func _physics_process(_delta: float) -> void:
 		return
 	_check_hits("left", left_glove)
 	_check_hits("right", right_glove)
+
+	# Datos para el enemigo + el cuerpo del jugador siempre mira hacia el enemigo
+	Global.player_position = global_position
+	$Head/RayCast3D.target_position = Global.enemy_position
+
+	var tangente := atan2($Head/RayCast3D.target_position.x, $Head/RayCast3D.target_position.z)
+	if debug_tracking_angle:
+		print(rad_to_deg(tangente))
+	rotation_degrees.y = rad_to_deg(tangente) - 180
 
 
 # ---------------------------------------------------------------------
@@ -523,9 +538,9 @@ func _check_hits(side: String, glove: Area3D) -> void:
 # ---------------------------------------------------------------------
 
 func _set_guard(active: bool) -> void:
-	if active == guarding:
+	if active == Global.player_blocking:
 		return
-	guarding = active
+	Global.player_blocking = active
 	if guard_glow:
 		_set_glove_glow(left_glove, active)
 		_set_glove_glow(right_glove, active)
@@ -551,7 +566,7 @@ func _set_glove_glow(glove: Node3D, on: bool) -> void:
 
 # Los enemigos llaman a esto. Devuelve true si el golpe fue bloqueado por completo.
 func take_hit(damage: float, attacker: Node = null) -> bool:
-	if guarding:
+	if Global.player_blocking:
 		blocked.emit(damage, attacker)
 		damage *= guard_damage_multiplier
 		if damage <= 0.0:
