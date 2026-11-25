@@ -1,9 +1,11 @@
 [gd_scene format=3 uid="uid://ovlligw7y3sm"]
 
-[ext_resource type="ArrayMesh" uid="uid://dca4tpk5c7oao" path="res://Texturas/escenario_gimnasio.obj" id="1_36rfg"]
-[ext_resource type="PackedScene" path="res://scenes/player ishma.tscn" id="2_bqrjk"]
-[ext_resource type="PackedScene" uid="uid://6ufluadok1wr" path="res://scenes/hud.tscn" id="3_bn284"]
-[ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="4_ed3wf"]
+[ext_resource type="ArrayMesh" path="res://Texturas/escenario_gimnasio.obj" id="1_36rfg"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="2_bqrjk"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_bn284"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="4_ed3wf"]
+
+[ext_resource type="Script" path="res://scripts/arena.gd" id="99_arena"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_cjdqc"]
 size = Vector3(10.160076, 0.16015244, 10.707542)
@@ -30,6 +32,7 @@ size = Vector3(26.187916, 0.2, 24.179958)
 size = Vector3(12.4, 0.2, 12.4)
 
 [node name="escenario_4" type="Node3D" unique_id=1487991506]
+script = ExtResource("99_arena")
 
 [node name="Escenario" type="StaticBody3D" parent="." unique_id=575368672]
 
@@ -82,27 +85,27 @@ shape = SubResource("BoxShape3D_fbqkl")
 
 [node name="OmniLight3D" type="OmniLight3D" parent="luz" unique_id=984553878]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 4.925175, -0.034499645)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 16.0
 
 [node name="OmniLight3D2" type="OmniLight3D" parent="luz" unique_id=322733192]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.201964, 4.925175, -0.034499645)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 16.0
 
 [node name="OmniLight3D3" type="OmniLight3D" parent="luz" unique_id=1339219107]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.1294565, 4.925175, -0.034499645)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 16.0
 
 [node name="OmniLight3D4" type="OmniLight3D" parent="luz" unique_id=236777667]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.30896282, 4.925175, 11.0236225)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 16.0
 
 [node name="OmniLight3D5" type="OmniLight3D" parent="luz" unique_id=1268039727]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.30896282, 4.925175, -13.050377)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 16.0
 
 [node name="Player" parent="." unique_id=618670275 instance=ExtResource("2_bqrjk")]

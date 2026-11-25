@@ -10,15 +10,21 @@ config_version=5
 
 [application]
 
-config/name="JUEGO VR"
-config/features=PackedStringArray("4.7", "GL Compatibility")
+config/name="ÑAPI · Camino al campeonato"
+run/main_scene="res://elementos de hud/interfaz inicial.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
-Global="*uid://bj1g6wx0yv1fo"
+Global="*res://global.gd"
 
 [display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1152
+window/size/window_height_override=648
 
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
@@ -32,3 +38,9 @@ window/stretch/aspect="expand"
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[layer_names]
+
+3d_physics/layer_1="Arena"
+3d_physics/layer_2="Rival"
+3d_physics/layer_3="Jugador"

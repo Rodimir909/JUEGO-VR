@@ -86,7 +86,8 @@ func _build_ui() -> void:
 
 	_add_button(vb, "Reanudar", close)
 	if quit_on_exit:
-		_add_button(vb, "Salir", _on_quit)
+		_add_button(vb, "Menú principal", Global.return_to_menu)
+	_add_button(vb, "Salir del juego", _on_quit)
 
 	var hint := Label.new()
 	hint.text = "Mové la mano para apuntar · pellizcá para elegir"
@@ -152,10 +153,11 @@ func _input(event: InputEvent) -> void:
 
 
 func open() -> void:
-	if get_tree().paused:
+	if get_tree().paused or Global.phase == Global.Phase.MATCH_END:
 		return
 	progress.visible = false
 	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_set_open(true)
 
 

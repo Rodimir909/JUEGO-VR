@@ -1,529 +1,396 @@
 extends CharacterBody3D
-
-# =====================================================================
-# Jugador en PRIMERA PERSONA controlado por webcam (MediaPipe via UDP)
-#   - Brazos   -> guantes + FUERZA de cada piña (velocidad del guante)
-#   - Cabeza   -> rotacion de camara + esquivar/agacharse
-#   - Guardia  -> manos en la cara = invulnerable a golpes
-#   - Pausa    -> mano arriba ~1 s = pausa; en el menu la mano mueve un cursor
-# Todos los valores de abajo se pueden ajustar desde el Inspector.
-#
-# CONTRATO CON LOS ENEMIGOS
-#   - Para RECIBIR piñas, el enemigo (cuerpo o area) necesita el metodo:
-#         func take_punch(damage: float, force: float, side: String) -> void
-#   - Para GOLPEAR al jugador, el enemigo llama:
-#         var bloqueado: bool = player.take_hit(damage, self)
-# =====================================================================
-
-signal punch_thrown(side: String, force: float)                       # termino una piña (force 0..1)
-signal punch_landed(target: Node, side: String, damage: float, force: float)
-signal guard_changed(active: bool)
-signal blocked(damage: float, attacker: Node)                         # un golpe fue bloqueado por la guardia
-signal damaged(damage: float, current_health: float)
-signal died
+## Un solo jugador para webcam y teclado. Los impactos se resuelven en física.
 signal pause_requested
-signal pause_hold_progress(progress: float)                           # 0..1 mientras mantenes la mano arriba
-signal cursor_updated(pos: Vector2, hand_visible: bool, pinch: bool)  # pos normalizada 0..1
+signal pause_hold_progress(progress: float)
+signal cursor_updated(pos: Vector2, hand_visible: bool, pinch: bool)
+signal punch_landed(target: Node, side: String, damage: float, force: float)
 
-@export_group("Red")
 @export var udp_port := 4242
-@export var debug_tracking_angle := false
-
-@export_group("Camara - rotacion")
-# Se multiplica el giro real de tu cabeza: como miras la pantalla, giros poco.
-@export var yaw_gain := 1.0
-@export var pitch_gain := 0.8
-@export var roll_gain := 0.3
-@export var max_yaw := 40.0     # grados
-@export var max_pitch := 30.0
-@export var max_roll := 15.0
-@export var angle_deadzone := 2.0   # grados que se ignoran (quita temblor)
-
-@export_group("Camara - movimiento (esquivar)")
-# Metros reales que te mueves * move_gain = metros que se mueve la camara
-@export var move_gain := 1.0
-@export var lean_gain := 0.4    # adelante/atras (es lo mas ruidoso)
-@export var max_sway := 0.30    # izquierda / derecha
-@export var max_duck := 0.45    # agacharse
-@export var max_rise := 0.15    # subir
-@export var max_lean := 0.15    # adelante / atras
-@export var move_deadzone := 0.02   # metros
-
-@export_group("Suavizado")
-# Mas alto = mas rapido y mas ruido. Mas bajo = mas suave y mas lag.
-@export var head_smoothing := 1000.0
-@export var glove_smoothing := 30.0
-
-@export_group("Guantes")
-# Metros de juego por cada "ancho de hombros" que se mueve tu muneca.
-# Tu brazo mide ~1.7 anchos de hombros, asi que x=0.65 -> brazo de ~1.1 m.
-@export var glove_scale := Vector3(0.65, 0.65, 0.75)
-@export var min_visibility := 0.5
-@export var lost_timeout := 0.4     # seg sin ver la muneca antes de volver a guardia
-# Donde estan los "hombros" en el espacio del jugador (el guante parte de ahi)
-@export var left_shoulder_anchor := Vector3(-0.25, 0.40, 0.0)
-@export var right_shoulder_anchor := Vector3(0.25, 0.40, 0.0)
-# Posicion de guardia cuando se pierde el tracking
-@export var left_rest := Vector3(-0.25, 0.55, -0.40)
-@export var right_rest := Vector3(0.25, 0.55, -0.40)
-# Limites de recorrido del guante respecto al hombro (en metros)
-@export var glove_limit_min := Vector3(-0.9, -0.7, -1.3)
-@export var glove_limit_max := Vector3(0.9, 0.7, 0.2)
-
-@export_group("Piñas - fuerza")
-# La fuerza sale de la VELOCIDAD del guante (m/s de juego), medida con los tiempos reales de Python.
-@export var punch_start_speed := 1.8    # por encima de esto arranca una piña (y es fuerza 0)
-@export var punch_end_speed := 0.9      # por debajo de esto la piña termina
-@export var punch_max_speed := 8.0      # a esta velocidad la fuerza es 1.0 (maxima)
-@export var speed_smoothing := 0.6      # peso de la muestra nueva (1 = sin suavizar)
-@export var punch_grace := 0.12         # seg despues del pico en los que todavia puede conectar (lag del guante)
-@export var punch_max_duration := 0.7   # una piña no dura mas que esto
-@export var min_damage := 5.0           # daño con fuerza 0
-@export var max_damage := 30.0          # daño con fuerza 1
-@export var damage_curve := 1.5         # >1: las piñas flojas dañan poco, las fuertes mucho
-@export var debug_punch := false        # imprime velocidad pico y fuerza de cada piña (para calibrar)
-
-@export_group("Guardia y vida")
-@export var max_health := 100.0
-@export var guard_damage_multiplier := 0.0   # 0 = invulnerable en guardia; 0.2 = pasa un 20 %
-@export var guard_glow := true               # los guantes brillan mientras estas en guardia
-
-@export_group("Pausa (gesto)")
-@export var pause_hold_time := 1.0       # seg con la mano arriba para pausar
-@export var pause_release_grace := 0.2   # tolerancia a parpadeos del tracking
-
-const RETRACT_RATIO := 0.5     # si el guante vuelve hacia el cuerpo a mas de esto de su velocidad, no cuenta como piña
-const PACKET_TIMEOUT := 0.5    # seg sin paquetes = Python caido / sin tracking
+@export var glove_smoothing := 28.0
+@export var head_smoothing := 14.0
+@export var punch_start_speed := 1.35
+@export var punch_max_speed := 6.5
+@export var move_speed := 2.6
+const PACKET_TIMEOUT := 0.55
+const REST_LEFT := Vector3(-0.28, 1.28, -0.42)
+const REST_RIGHT := Vector3(0.28, 1.28, -0.42)
+const ANCHOR_LEFT := Vector3(-0.25, 1.2, 0)
+const ANCHOR_RIGHT := Vector3(0.25, 1.2, 0)
 
 @onready var left_glove: Area3D = $LeftGlove
 @onready var right_glove: Area3D = $RightGlove
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
-
 var udp := PacketPeerUDP.new()
-
-var left_target := Vector3.ZERO
-var right_target := Vector3.ZERO
-var left_lost := 0.0
-var right_lost := 0.0
-
-var head_rest := Vector3.ZERO
-var head_target_pos := Vector3.ZERO
-var head_target_rot := Vector3.ZERO   # (pitch, yaw, roll) en radianes
-var head_lost := 0.0
-
-var packet_age := 0.0
-var health := 0.0
-
-
+var command_udp := PacketPeerUDP.new()
+var packet_age := 99.0
+var left_age := 99.0
+var right_age := 99.0
+var left_target := REST_LEFT
+var right_target := REST_RIGHT
+var head_target := Vector3.ZERO
+var rotation_target := Vector3.ZERO
+var previous_gloves := {"left": Vector3.ZERO, "right": Vector3.ZERO}
+var was_tracking := false
+var valid_body_age := 0.0
+var had_valid_body := false
+var loss_notified := false
+var keyboard_override := false
+var tracking_guard := false
 var pause_pose := false
 var pause_hold := 0.0
-var pause_idle := 0.0
-var pause_latched := false    # tras pausar hay que bajar la mano antes de poder volver a disparar el gesto
-
+var pause_latched := false
+var pause_release := 0.0
+var last_frame := -1
+var last_capture := -1.0
+var keyboard_cooldown := 0.0
+var manual_attack := {"left": 0.0, "right": 0.0}
 
 class PunchState:
 	var last_pos := Vector3.ZERO
 	var last_t := -1.0
-	var vel := Vector3.ZERO       # velocidad suavizada (m/s)
-	var speed := 0.0
-	var peak := 0.0               # velocidad pico de la piña actual
+	var velocity := Vector3.ZERO
 	var active := false
+	var peak := 0.0
 	var elapsed := 0.0
-	var since_end := 999.0
-	var hit_done := false         # una piña pega una sola vez
+	var grace := 99.0
+	var hit_done := true
+	var cooldown := 0.0
 
-
-var punch := {
-	"left": PunchState.new(),
-	"right": PunchState.new()
-}
-
+var punches := {"left": PunchState.new(), "right": PunchState.new()}
 
 func _ready() -> void:
-	process_mode = Node.PROCESS_MODE_ALWAYS   # sigue leyendo la webcam aunque el juego este en pausa
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_to_group("player")
-	health = max_health
-
-	var error := udp.bind(udp_port, "127.0.0.1")
-
-	if error != OK:
-		push_error("No se pudo abrir el puerto UDP %d" % udp_port)
-	else:
-		print("Esperando datos de Python en el puerto %d..." % udp_port)
-
-	head_rest = head.position
-	head_target_pos = head_rest
-
-	left_target = left_rest
-	right_target = right_rest
-	left_glove.position = left_rest
-	right_glove.position = right_rest
-
+	keyboard_override = Global.keyboard_override
+	_style_glove(left_glove, false)
+	_style_glove(right_glove, true)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if udp.bind(udp_port, "127.0.0.1") != OK:
+		Global.tracking_status = "Puerto de webcam ocupado · Usá teclado y mouse"
+	command_udp.set_dest_address("127.0.0.1", udp_port + 1)
+	left_glove.position = REST_LEFT
+	right_glove.position = REST_RIGHT
+	previous_gloves["left"] = left_glove.global_position
+	previous_gloves["right"] = right_glove.global_position
+	Global.camera_active = false
+	Global.tracking_ready = false
 
 func _exit_tree() -> void:
 	udp.close()
+	command_udp.close()
 
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("recalibrate"):
+		command_udp.put_packet("calibrate".to_utf8_buffer())
+		_clear_punches()
+	elif event.is_action_pressed("keyboard_mode"):
+		keyboard_override = not keyboard_override
+		Global.keyboard_override = keyboard_override
+		_clear_punches()
+		Global.notice.emit("Teclado y mouse" if keyboard_override else "Webcam automática")
 
 func _process(delta: float) -> void:
-	# Nos quedamos solo con el ULTIMO paquete y lo parseamos UNA vez: si Godot se atrasa,
-	# los viejos solo agregan latencia (y parsearlos para tirarlos es CPU desperdiciada).
-	var latest: Variant = _read_latest_packet()
-
 	packet_age += delta
-	left_lost += delta
-	right_lost += delta
-	head_lost += delta
-
-	if latest != null:
-		packet_age = 0.0
-		_read_packet(latest)
-
-	if packet_age > PACKET_TIMEOUT:
-		_on_tracking_lost()
-
-	# Si se pierde el tracking, volver a guardia / posicion neutra
-	if left_lost > lost_timeout:
-		left_target = left_rest
-	if right_lost > lost_timeout:
-		right_target = right_rest
-	if head_lost > 0.6:
-		head_target_pos = head_rest
-		head_target_rot = Vector3.ZERO
-
-	_tick_punches(delta)
-	_update_pause_gesture(delta)
-	
-
-	# En pausa el cuerpo queda congelado; solo seguimos leyendo la webcam (para el cursor)
-	if get_tree().paused:
-		return
-
-	_update_gloves(delta)
-	_update_head(delta)
-
-
-func _physics_process(_delta: float) -> void:
-	if get_tree().paused:
-		return
-	_check_hits("left", left_glove)
-	_check_hits("right", right_glove)
-	Global.player_position = global_position
-	$Head/RayCast3D.target_position=Global.enemy_position
-	
-	var tangente := atan2($Head/RayCast3D.target_position.x, $Head/RayCast3D.target_position.z)
-	if debug_tracking_angle:
-		print(rad_to_deg(tangente))
-	rotation_degrees.y = rad_to_deg(tangente)-180
-# ---------------------------------------------------------------------
-# Lectura del paquete
-# ---------------------------------------------------------------------
-
-func _read_latest_packet() -> Variant:
-	var count := udp.get_available_packet_count()
-	if count == 0:
-		return null
-
-	# Se descartan los viejos sin decodificarlos: solo el ultimo se convierte a texto y JSON.
+	valid_body_age += delta
+	left_age += delta
+	right_age += delta
 	var bytes := PackedByteArray()
-	for i in count:
+	while udp.get_available_packet_count() > 0:
 		bytes = udp.get_packet()
+	if not bytes.is_empty():
+		var data: Variant = JSON.parse_string(bytes.get_string_from_utf8())
+		if data is Dictionary:
+			_read_packet(data)
+	var tracking := packet_age < PACKET_TIMEOUT and not keyboard_override
+	Global.camera_active = tracking
+	if not tracking:
+		tracking_guard = false
+		pause_pose = false
+		Global.tracking_ready = false
+		cursor_updated.emit(Vector2.ZERO, false, false)
+		if was_tracking and not keyboard_override and Global.is_fighting() and not get_tree().paused:
+			_clear_punches()
+			Global.notice.emit("Se perdió la webcam. Revisá la cámara o pulsá K para usar teclado.")
+			pause_requested.emit()
+		Global.tracking_status = "TECLADO Y MOUSE · K: webcam · C: calibrar"
+	elif not Global.tracking_ready:
+		Global.tracking_status = "WEBCAM · Calibrando: mirá al frente con las manos en guardia · K: teclado"
+	else:
+		Global.tracking_status = "WEBCAM · Izq. %s / Der. %s · C: calibrar · K: teclado" % ["OK" if left_age < 0.25 else "perdida", "OK" if right_age < 0.25 else "perdida"]
+	if tracking and had_valid_body and valid_body_age > 0.8 and not loss_notified and Global.is_fighting() and not get_tree().paused:
+		loss_notified = true
+		Global.notice.emit("Cuerpo fuera de cámara. Recuperá la pose o pulsá K para usar teclado.")
+		pause_requested.emit()
+	was_tracking = tracking
+	if tracking and left_age > 0.25:
+		left_target = REST_LEFT
+		_reset_punch("left")
+	if tracking and right_age > 0.25:
+		right_target = REST_RIGHT
+		_reset_punch("right")
+	_update_pause(delta)
+	if get_tree().paused:
+		_clear_punches()
+		return
+	if tracking and not Global.tracking_ready and Global.phase == Global.Phase.INTRO:
+		Global.phase_time = Global.INTRO_TIME
 
-	var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
-	if typeof(parsed) == TYPE_DICTIONARY:
-		return parsed
-	return null
+func _physics_process(delta: float) -> void:
+	if get_tree().paused:
+		return
+	var tracking := Global.camera_active
+	var fighting := Global.is_fighting()
+	keyboard_cooldown = maxf(keyboard_cooldown - delta, 0.0)
+	for side in punches:
+		var state: PunchState = punches[side]
+		state.cooldown = maxf(state.cooldown - delta, 0.0)
+		state.grace += delta
+		if state.active:
+			state.elapsed += delta
+			if state.elapsed > 0.45:
+				state.active = false
+				state.grace = 0.0
+		manual_attack[side] = maxf(float(manual_attack[side]) - delta, 0.0)
 
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back") if fighting else Vector2.ZERO
+	var wish := global_basis * Vector3(input_dir.x, 0, input_dir.y)
+	velocity.x = wish.x * move_speed
+	velocity.z = wish.z * move_speed
+	velocity.y = 0.0 if is_on_floor() else velocity.y - 9.8 * delta
+	move_and_slide()
+	# Las cuerdas de los modelos son finas: este límite mantiene a ambos dentro.
+	position.x = clampf(position.x, -3.7, 3.7)
+	position.z = clampf(position.z, -3.7, 3.7)
+	var to_enemy := Global.enemy_position - global_position
+	to_enemy.y = 0.0
+	if to_enemy.length() > 0.1:
+		rotation.y = lerp_angle(rotation.y, atan2(-to_enemy.x, -to_enemy.z), 1.0 - exp(-8.0 * delta))
+
+	if not tracking:
+		head_target = Vector3(0, -0.34 if Input.is_action_pressed("duck") and fighting else 0.0, 0)
+		rotation_target = Vector3.ZERO
+		left_target = REST_LEFT
+		right_target = REST_RIGHT
+		if fighting and keyboard_cooldown <= 0.0 and not Input.is_action_pressed("block"):
+			if Input.is_action_just_pressed("punch_left"):
+				_keyboard_punch("left")
+			elif Input.is_action_just_pressed("punch_right"):
+				_keyboard_punch("right")
+		for side in manual_attack:
+			var remaining := float(manual_attack[side])
+			if remaining > 0.0:
+				var extension := sin(clampf((0.3 - remaining) / 0.3, 0, 1) * PI)
+				var target := (REST_LEFT if side == "left" else REST_RIGHT) + Vector3(0, 0.05, -0.95) * extension
+				if side == "left":
+					left_target = target
+				else:
+					right_target = target
+
+	Global.player_punching = fighting and (punches["left"].active or punches["right"].active)
+	Global.player_blocking = fighting and not Global.player_punching and (tracking_guard if tracking else Input.is_action_pressed("block"))
+	if not tracking and Global.player_blocking:
+		left_target = Vector3(-0.17, 1.48, -0.42)
+		right_target = Vector3(0.17, 1.48, -0.42)
+	var head_weight := 1.0 - exp(-head_smoothing * delta)
+	head.position = head.position.lerp(Vector3(0, 1.6, 0) + head_target, head_weight)
+	head.rotation = head.rotation.lerp(rotation_target, head_weight)
+	Global.player_head_offset = head.position - Vector3(0, 1.6, 0)
+	Global.player_position = global_position
+	# Los guantes acompañan el torso al agacharse sin arrastrar el giro de mirada.
+	var body_offset := head_target * Vector3(0.8, 0.85, 0.4)
+	var weight := 1.0 - exp(-glove_smoothing * delta)
+	left_glove.position = left_glove.position.lerp(left_target + body_offset, weight)
+	right_glove.position = right_glove.position.lerp(right_target + body_offset, weight)
+	_check_hit("left", left_glove)
+	_check_hit("right", right_glove)
 
 func _read_packet(data: Dictionary) -> void:
-	# Reloj de Python (segundos): sirve para calcular velocidades sin depender de los FPS de Godot
-	var t := float(data.get("t", Time.get_ticks_msec() / 1000.0))
-
-	var l: Variant = _arm_target(data.get("left"), left_shoulder_anchor)
-	if l != null:
-		left_target = l
-		left_lost = 0.0
-		_track_punch("left", l, t)
+	var capture := _number(data.get("t"), -1.0)
+	if capture < 0.0:
+		return
+	var sequence := int(_number(data.get("frame"), -1))
+	# Aceptar el reinicio del proceso de Python después de una desconexión.
+	if packet_age > PACKET_TIMEOUT:
+		last_capture = -1.0
+		last_frame = -1
+	if capture <= last_capture or (sequence >= 0 and sequence <= last_frame):
+		return
+	last_capture = capture
+	last_frame = sequence
+	packet_age = 0.0
+	if keyboard_override:
+		return
+	Global.tracking_ready = bool(data.get("calibrated", false))
+	for side in punches:
+		var arm: Variant = data.get(side)
+		if not arm is Dictionary or not arm.get("rel") is Dictionary:
+			_reset_punch(side)
+			continue
+		var wrist: Variant = arm.get("wrist")
+		if not wrist is Dictionary or _number(wrist.get("visibility"), 0.0) < 0.5:
+			_reset_punch(side)
+			continue
+		var rel: Dictionary = arm["rel"]
+		var offset := Vector3(_number(rel.get("x"), 0), _number(rel.get("y"), 0), _number(rel.get("z"), -0.5))
+		offset *= Vector3(0.65, 0.65, 0.95)
+		offset = offset.clamp(Vector3(-0.85, -0.55, -1.45), Vector3(0.85, 0.65, -0.12))
+		var target := (ANCHOR_LEFT if side == "left" else ANCHOR_RIGHT) + offset
+		if side == "left":
+			left_target = target
+			left_age = 0.0
+		else:
+			right_target = target
+			right_age = 0.0
+		if Global.tracking_ready:
+			_track_punch(side, target, capture)
+	var h: Variant = data.get("head")
+	if h is Dictionary and h.get("valid", false):
+		valid_body_age = 0.0
+		had_valid_body = true
+		loss_notified = false
+		head_target = Vector3(clampf(_number(h.get("x"), 0) * 1.4, -0.34, 0.34), clampf(_number(h.get("y"), 0) * 1.4, -0.45, 0.12), clampf(-_number(h.get("z"), 0) * 0.4, -0.15, 0.15))
+		rotation_target = Vector3(deg_to_rad(clampf(_number(h.get("pitch"), 0), -18, 18)), deg_to_rad(clampf(-_number(h.get("yaw"), 0), -22, 22)), deg_to_rad(clampf(-_number(h.get("roll"), 0) * 0.25, -8, 8)))
 	else:
-		_reset_punch("left")
-
-	var r: Variant = _arm_target(data.get("right"), right_shoulder_anchor)
-	if r != null:
-		right_target = r
-		right_lost = 0.0
-		_track_punch("right", r, t)
-	else:
-		_reset_punch("right")
-
-	_read_head(data.get("head"))
-
-	_set_guard(bool(data.get("guard", false)))
+		head_target = Vector3.ZERO
+		rotation_target = Vector3.ZERO
+	tracking_guard = bool(data.get("guard", false)) and left_age < 0.2 and right_age < 0.2
 	pause_pose = bool(data.get("pause_pose", false))
-
-	var c: Variant = data.get("cursor")
-	if typeof(c) == TYPE_DICTIONARY and bool(c.get("visible", false)):
-		cursor_updated.emit(Vector2(float(c["x"]), float(c["y"])), true, bool(c.get("pinch", false)))
+	var cursor: Variant = data.get("cursor")
+	if cursor is Dictionary and cursor.get("visible", false):
+		cursor_updated.emit(Vector2(clampf(_number(cursor.get("x"), 0.5), 0, 1), clampf(_number(cursor.get("y"), 0.5), 0, 1)), true, bool(cursor.get("pinch", false)))
 	else:
 		cursor_updated.emit(Vector2.ZERO, false, false)
 
+func _number(value: Variant, fallback: float) -> float:
+	if (value is float or value is int) and is_finite(float(value)):
+		return float(value)
+	return fallback
 
-func _on_tracking_lost() -> void:
-	_set_guard(false)
-	pause_pose = false
-	cursor_updated.emit(Vector2.ZERO, false, false)
-
-
-func _arm_target(arm: Variant, anchor: Vector3) -> Variant:
-
-	if typeof(arm) != TYPE_DICTIONARY or not arm.has("rel") or not arm.has("wrist"):
-		return null
-
-	var wrist: Variant = arm["wrist"]
-	if typeof(wrist) != TYPE_DICTIONARY or float(wrist.get("visibility", 0.0)) < min_visibility:
-		return null
-
-	var rel: Dictionary = arm["rel"]
-
-	# rel.x: derecha+ | rel.y: arriba+ | rel.z: negativo = hacia la pantalla
-	# En Godot adelante es -Z, asi que el signo de z ya coincide.
-	var offset := Vector3(
-		float(rel["x"]) * glove_scale.x,
-		float(rel["y"]) * glove_scale.y,
-		float(rel["z"]) * glove_scale.z
-	)
-
-	offset = offset.clamp(glove_limit_min, glove_limit_max)
-
-	return anchor + offset
-
-
-func _read_head(h: Variant) -> void:
-
-	if typeof(h) != TYPE_DICTIONARY or not h.get("valid", false):
-		return
-
-	var yaw := clampf(_deadzone(float(h["yaw"]), angle_deadzone) * yaw_gain, -max_yaw, max_yaw)
-	var pitch := clampf(_deadzone(float(h["pitch"]), angle_deadzone) * pitch_gain, -max_pitch, max_pitch)
-	var roll := clampf(_deadzone(float(h["roll"]), angle_deadzone) * roll_gain, -max_roll, max_roll)
-
-	# Python: yaw+ = giras a tu derecha, pitch+ = miras arriba, roll+ = inclinas a la derecha
-	# Godot:  girar a la derecha = rotation.y NEGATIVO, mirar arriba = rotation.x POSITIVO,
-	#         inclinar a la derecha = rotation.z NEGATIVO
-	head_target_rot = Vector3(
-		deg_to_rad(pitch),
-		deg_to_rad(-yaw),
-		deg_to_rad(-roll)
-	)
-
-	var sway := clampf(_deadzone(float(h["x"]), move_deadzone) * move_gain, -max_sway, max_sway)
-	var rise := clampf(_deadzone(float(h["y"]), move_deadzone) * move_gain, -max_duck, max_rise)
-	var lean := clampf(_deadzone(float(h["z"]), move_deadzone) * lean_gain, -max_lean, max_lean)
-
-	# lean+ = te acercas a la pantalla = camara hacia adelante (-Z)
-	head_target_pos = head_rest + Vector3(sway, rise, -lean)
-
-	head_lost = 0.0
-
-
-func _deadzone(value: float, zone: float) -> float:
-	if absf(value) <= zone:
-		return 0.0
-	return value - signf(value) * zone
-
-
-# ---------------------------------------------------------------------
-# Fuerza de la piña
-# ---------------------------------------------------------------------
-# Cada paquete trae la posicion objetivo del guante y el tiempo real de captura (t).
-# Velocidad = distancia / tiempo entre paquetes. Cuando supera punch_start_speed arranca
-# una piña, se guarda la velocidad PICO y al bajar de punch_end_speed la piña termina.
-# La fuerza (0..1) sale de ese pico y se convierte en daño cuando el guante toca un enemigo.
-
-func _track_punch(side: String, pos: Vector3, t: float) -> void:
-	if get_tree().paused:
+func _track_punch(side: String, target: Vector3, capture: float) -> void:
+	var state: PunchState = punches[side]
+	if not Global.is_fighting() or get_tree().paused or Time.get_ticks_msec() < Global.player_stun_until:
 		_reset_punch(side)
 		return
+	if state.last_t >= 0.0:
+		var dt := capture - state.last_t
+		var movement := target - state.last_pos
+		if dt > 0.005 and dt < 0.3 and movement.length() < maxf(0.65, dt * 8.0):
+			var alpha := 1.0 - exp(-25.0 * dt)
+			state.velocity = state.velocity.lerp(movement / dt, alpha)
+			var speed := state.velocity.length()
+			var advancing := state.velocity.z < -0.25
+			if not state.active and state.cooldown <= 0.0 and speed >= punch_start_speed and advancing:
+				state.active = true
+				state.hit_done = false
+				state.peak = speed
+				state.elapsed = 0.0
+				state.grace = 99.0
+				state.cooldown = 0.28
+			elif state.active:
+				state.peak = maxf(state.peak, speed)
+				if speed < 0.65 or state.velocity.z > 0.35:
+					state.active = false
+					state.grace = 0.0 if state.velocity.z <= 0.35 else 99.0
+		else:
+			_reset_punch(side)
+	state.last_pos = target
+	state.last_t = capture
 
-	var s: PunchState = punch[side]
-	if s.last_t >= 0.0:
-		var dt := t - s.last_t
-		if dt > 0.001 and dt < 0.25:
-			var raw_vel := (pos - s.last_pos) / dt
-			s.vel = s.vel.lerp(raw_vel, speed_smoothing)
-			s.speed = s.vel.length()
-			_step_punch(side, s)
-		elif dt >= 0.25:
-			s.vel = Vector3.ZERO
-			s.speed = 0.0
-	s.last_pos = pos
-	s.last_t = t
-
-
-func _step_punch(side: String, s: PunchState) -> void:
-	# +Z = el guante vuelve hacia tu cuerpo (retroceso de la piña, no cuenta)
-	var retracting: bool = s.vel.z > RETRACT_RATIO * s.speed
-
-	if not s.active:
-		if s.speed >= punch_start_speed and not retracting:
-			s.active = true
-			s.hit_done = false
-			s.elapsed = 0.0
-			s.peak = s.speed
-	else:
-		s.peak = maxf(s.peak, s.speed)
-		if s.speed <= punch_end_speed or retracting:
-			_end_punch(side, s)
-
-
-func _end_punch(side: String, s: PunchState) -> void:
-	s.active = false
-	s.since_end = 0.0
-	var f := _force_from_speed(s.peak)
-	if debug_punch:
-		print("[%s] piña: pico %.2f m/s -> fuerza %.2f -> daño %.1f" % [side, s.peak, f, force_to_damage(f)])
-	punch_thrown.emit(side, f)
-
+func _keyboard_punch(side: String) -> void:
+	if Time.get_ticks_msec() < Global.player_stun_until:
+		return
+	keyboard_cooldown = 0.34
+	manual_attack[side] = 0.3
+	var state: PunchState = punches[side]
+	state.active = true
+	state.hit_done = false
+	state.peak = 4.0
+	state.elapsed = 0.0
+	state.grace = 99.0
 
 func _reset_punch(side: String) -> void:
-	var s: PunchState = punch[side]
-	s.last_t = -1.0
-	s.vel = Vector3.ZERO
-	s.speed = 0.0
-	s.active = false
+	var state: PunchState = punches[side]
+	state.last_t = -1.0
+	state.velocity = Vector3.ZERO
+	state.active = false
+	state.hit_done = true
+	state.peak = 0.0
+	state.grace = 99.0
 
+func _clear_punches() -> void:
+	_reset_punch("left")
+	_reset_punch("right")
 
-func _tick_punches(delta: float) -> void:
-	for side in punch:
-		var s: PunchState = punch[side]
-		if s.active:
-			s.elapsed += delta
-			if s.elapsed > punch_max_duration:
-				_end_punch(side, s)
-		else:
-			s.since_end += delta
-
-
-func _force_from_speed(speed: float) -> float:
-	return clampf(inverse_lerp(punch_start_speed, punch_max_speed, speed), 0.0, 1.0)
-
-
-func force_to_damage(force: float) -> float:
-	return lerpf(min_damage, max_damage, pow(force, damage_curve))
-
-
-# Fuerza (0..1) de la piña en curso de ese lado; 0 si no hay piña.
-func get_punch_force(side: String) -> float:
-	var s: PunchState = punch[side]
-	if s.active or s.since_end <= punch_grace:
-		return _force_from_speed(s.peak)
-	return 0.0
-
-
-func _check_hits(side: String, glove: Area3D) -> void:
-	var s: PunchState = punch[side]
-	if s.hit_done or not (s.active or s.since_end <= punch_grace):
+func _check_hit(side: String, glove: Area3D) -> void:
+	var previous: Vector3 = previous_gloves[side]
+	var current := glove.global_position
+	previous_gloves[side] = current
+	var state: PunchState = punches[side]
+	if not Global.is_fighting() or state.hit_done or not (state.active or state.grace < 0.10):
 		return
+	# Barrido de todo el recorrido: un puño rápido no atraviesa al rival entre frames.
+	var shape := CapsuleShape3D.new()
+	shape.radius = 0.15
+	shape.height = maxf(0.3, previous.distance_to(current) + 0.3)
+	var basis := Basis.IDENTITY
+	if previous.distance_to(current) > 0.001:
+		basis = Basis(Quaternion(Vector3.UP, (current - previous).normalized()))
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = Transform3D(basis, (previous + current) * 0.5)
+	query.collision_mask = 2
+	query.exclude = [get_rid()]
+	for result in get_world_3d().direct_space_state.intersect_shape(query, 8):
+		var target: Object = result["collider"]
+		if target.has_method("take_punch"):
+			var force := clampf(inverse_lerp(punch_start_speed, punch_max_speed, state.peak), 0.0, 1.0)
+			var damage := lerpf(9.0, 30.0, pow(force, 1.2))
+			state.hit_done = true
+			target.take_punch(damage, force, side)
+			punch_landed.emit(target, side, damage, force)
+			return
 
-	var candidates: Array = []
-	candidates.append_array(glove.get_overlapping_bodies())
-	candidates.append_array(glove.get_overlapping_areas())
-
-	for target in candidates:
-		if target == self or not target.has_method("take_punch"):
-			continue
-		var force := _force_from_speed(s.peak)
-		var damage := force_to_damage(force)
-		target.take_punch(damage, force, side)
-		s.hit_done = true
-		if debug_punch:
-			print("[%s] CONECTA en %s: fuerza %.2f, daño %.1f" % [side, target.name, force, damage])
-		punch_landed.emit(target, side, damage, force)
-		return
-
-
-# ---------------------------------------------------------------------
-# Guardia y daño recibido
-# ---------------------------------------------------------------------
-
-func _set_guard(active: bool) -> void:
-	if active == Global.player_blocking:
-		return
-	Global.player_blocking = active
-	if guard_glow:
-		_set_glove_glow(left_glove, active)
-		_set_glove_glow(right_glove, active)
-	guard_changed.emit(active)
-
-
-func _set_glove_glow(glove: Node3D, on: bool) -> void:
-	var mi := glove.get_node_or_null("MeshInstance3D") as MeshInstance3D
-	if mi == null or not (mi.mesh is PrimitiveMesh):
-		return
-	var mat := (mi.mesh as PrimitiveMesh).material as StandardMaterial3D
-	if mat == null:
-		return
-	mat.emission_enabled = on
-	mat.emission = mat.albedo_color
-	mat.emission_energy_multiplier = 0.8
-
-
-# Los enemigos llaman a esto. Devuelve true si el golpe fue bloqueado por completo.
-func take_hit(damage: float, attacker: Node = null) -> bool:
-	if Global.player_blocking:
-		blocked.emit(damage, attacker)
-		damage *= guard_damage_multiplier
-		if damage <= 0.0:
-			return true
-
-	health = maxf(0.0, health - damage)
-	damaged.emit(damage, health)
-	if health <= 0.0:
-		died.emit()
-	return false
-
-
-# ---------------------------------------------------------------------
-# Gesto de pausa: mano arriba mantenida
-# ---------------------------------------------------------------------
-
-func _update_pause_gesture(delta: float) -> void:
-	if get_tree().paused:
-		# Mientras el menu esta abierto no se dispara; al reanudar hay que bajar la mano
+func _update_pause(delta: float) -> void:
+	if get_tree().paused or not Global.camera_active:
 		pause_hold = 0.0
-		pause_latched = true
+		pause_hold_progress.emit(0.0)
 		return
-
-	if pause_pose and not pause_latched:
-		pause_idle = 0.0
-		pause_hold += delta
-		if pause_hold >= pause_hold_time:
+	if not pause_pose:
+		pause_release += delta
+		if pause_release > 0.25:
 			pause_hold = 0.0
-			pause_latched = true
-			pause_hold_progress.emit(0.0)
-			pause_requested.emit()
-		else:
-			pause_hold_progress.emit(pause_hold / pause_hold_time)
+			pause_latched = false
 	else:
-		pause_idle += delta
-		if pause_idle > pause_release_grace:
-			if pause_hold > 0.0:
+		pause_release = 0.0
+		if not pause_latched:
+			pause_hold += delta
+			if pause_hold > 1.2:
+				pause_latched = true
 				pause_hold = 0.0
-				pause_hold_progress.emit(0.0)
-			if not pause_pose:
-				pause_latched = false
+				pause_requested.emit()
+	pause_hold_progress.emit(pause_hold / 1.2)
 
-
-# ---------------------------------------------------------------------
-# Actualizacion (independiente de los FPS)
-# ---------------------------------------------------------------------
-
-func _update_gloves(delta: float) -> void:
-	var w := 1.0 - exp(-glove_smoothing * delta)
-	left_glove.position = left_glove.position.lerp(left_target, w)
-	right_glove.position = right_glove.position.lerp(right_target, w)
-
-
-func _update_head(delta: float) -> void:
-	var w := 1.0 - exp(-head_smoothing * delta)
-	head.position = head.position.lerp(head_target_pos, w)
-	head.rotation = head.rotation.lerp(head_target_rot, w)
+func _style_glove(glove: Area3D, right: bool) -> void:
+	var main := glove.get_node("MeshInstance3D") as MeshInstance3D
+	main.scale = Vector3(1.0, 0.94, 1.25)
+	var thumb := MeshInstance3D.new()
+	var thumb_mesh := SphereMesh.new()
+	thumb_mesh.radius = 0.045
+	thumb_mesh.height = 0.12
+	thumb_mesh.material = (main.mesh as PrimitiveMesh).material
+	thumb.mesh = thumb_mesh
+	thumb.position = Vector3(-0.095 if right else 0.095, -0.04, 0.02)
+	glove.add_child(thumb)
+	var cuff := MeshInstance3D.new()
+	var cuff_mesh := CylinderMesh.new()
+	cuff_mesh.top_radius = 0.085
+	cuff_mesh.bottom_radius = 0.085
+	cuff_mesh.height = 0.09
+	var cuff_material := StandardMaterial3D.new()
+	cuff_material.albedo_color = Color("e5e8ef")
+	cuff_mesh.material = cuff_material
+	cuff.mesh = cuff_mesh
+	cuff.position.z = 0.13
+	cuff.rotation.x = PI / 2
+	glove.add_child(cuff)

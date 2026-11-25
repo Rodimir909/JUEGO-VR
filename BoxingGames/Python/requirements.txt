@@ -1,0 +1,6 @@
+mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4
+# JAX 0.7.1 conserva compatibilidad con NumPy 1.26; evita resolver versiones incompatibles.
+jax==0.7.1
+jaxlib==0.7.1

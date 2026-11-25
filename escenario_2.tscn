@@ -1,9 +1,11 @@
 [gd_scene format=3 uid="uid://wkgwhtm7jdja"]
 
-[ext_resource type="ArrayMesh" uid="uid://cydsvtnr884f5" path="res://Texturas/escenario_club.obj" id="1_ohcvn"]
-[ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="3_c0wqe"]
-[ext_resource type="PackedScene" uid="uid://dp707odycbxuq" path="res://player/player.tscn" id="4_dmn3s"]
-[ext_resource type="PackedScene" uid="uid://6ufluadok1wr" path="res://scenes/hud.tscn" id="4_ohcvn"]
+[ext_resource type="ArrayMesh" path="res://Texturas/escenario_club.obj" id="1_ohcvn"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="3_c0wqe"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="4_dmn3s"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="4_ohcvn"]
+
+[ext_resource type="Script" path="res://scripts/arena.gd" id="99_arena"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ohcvn"]
 albedo_color = Color(0.3, 0.3, 0.32, 1)
@@ -32,6 +34,7 @@ size = Vector3(10.441071, 0.13092041, 10.479004)
 size = Vector3(0.049804688, 0.040100098, 8.711243)
 
 [node name="escenario 2" type="Node3D" unique_id=1017346211]
+script = ExtResource("99_arena")
 
 [node name="Enemy" parent="." unique_id=1809449653 instance=ExtResource("3_c0wqe")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2.335)

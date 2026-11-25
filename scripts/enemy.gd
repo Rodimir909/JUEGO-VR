@@ -1,512 +1,209 @@
 extends CharacterBody3D
-
-
-enum State { APPROACH, CIRCLE, WINDUP, RECOVER, BLOCK, DODGE, LUNGE }
-enum Attack { JAB, HEAVY, FEINT }
-
-const REST_R := Vector3.ZERO
-const REST_L := Vector3.ZERO
-const GUARD_R := Vector3(0.0, -0.2, 0.0)
-const GUARD_L := Vector3(0.0, 0.2, 0.0)
-const WINDUP_R := Vector3(0.0, 0.18, 0.0)
-const WINDUP_L := Vector3(0.0, -0.18, 0.0)
-const JAB_R := Vector3(0.0, -0.12, 0.0)
-const JAB_L := Vector3(0.0, 0.12, 0.0)
-const HOOK_R := Vector3(0.0, -1.0, 0.0)
-const JAB_ADVANCE := Vector3(0.0, 0.0, 0.75)
-const HOOK_ADVANCE := Vector3(-0.24, 0.0, 0.5)
-const GLOVE_COLOR := Color(0.1, 0.1, 0.1)
-const HEAVY_COLOR := Color(1.0, 0.5, 0.05)
-const RAGE_COLOR := Color(1.0, 0.25, 0.25)
-
-@export var base_move_speed := 2.8
-@export var base_circle_speed := 1.8
-@export var base_windup := 0.32
-@export var base_recover := 0.4
-@export var jab_damage := 1.0
-@export var heavy_damage := 2.2
-@export var rage_health := 40.0   # por debajo de esta vida entra en furia
-
-@onready var boxer_rig: Node3D = $BoxerRig
-@onready var arm_r: Node3D = $BoxerRig/ArmRightPivot
-@onready var arm_l: Node3D = $BoxerRig/ArmLeftPivot
-@onready var arm_r_mesh: MeshInstance3D = $BoxerRig/ArmRightPivot/ArmRightMesh
-@onready var arm_l_mesh: MeshInstance3D = $BoxerRig/ArmLeftPivot/ArmLeftMesh
-
-var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
-var base_diff := 1.0
-var diff := 1.0           
-var move_speed := 2.8
-var circle_speed := 1.8
-var rage := false
-
+## Rival con anticipación visible, impactos al extender el brazo y recuperación.
+enum State { APPROACH, CIRCLE, WINDUP, STRIKE, RECOVER, BLOCK, DODGE }
+@onready var rig: Node3D = $BoxerRig
+@onready var arm_left: Node3D = $BoxerRig/ArmLeftPivot
+@onready var arm_right: Node3D = $BoxerRig/ArmRightPivot
+var config: Dictionary
 var state: State = State.RECOVER
-var attack: Attack = Attack.JAB
-var state_time := 0.5
-var circle_dir := 1.0
-var combo_left := 0
-var did_combo := false
+var state_time := 0.8
+var heavy := false
 var use_left := false
-var no_block_until := 0
-var no_dodge_until := 0
-var no_lunge_until := 0
-var parry_time := 0.0
-var dodge_dir := Vector3.ZERO
-var block_habit := 0.0     # cuánto te cubrís (0 a 1)
-var punch_habit := 0.0     # cuánto pegás
-var retreat_habit := 0.0   # cuánto te alejás (0 a 1)
-var prev_player_punching := false
-var prev_dist := 0.0
+var combo_left := 0
+var impact_done := false
 var ko := false
-var body_rest_scale := Vector3.ONE
+var circle_dir := 1.0
 var idle_time := 0.0
+var reaction_cooldown := 0.0
+var previous_punch := false
+var attack_tween: Tween
 var flash_tween: Tween
-var body_pose_tween: Tween
-var arm_overlay: StandardMaterial3D
-var tweens: Dictionary = {}
-
+var rest_left := Vector3.ZERO
+var rest_right := Vector3.ZERO
+var warning_material: StandardMaterial3D
+var aimed_offset := Vector3.ZERO
 
 func _ready() -> void:
-	# Dificultad según el round (arranca más alta y sube más)
-	base_diff = minf(1.25 + 0.25 * float(Global.round_number - 1), 2.0)
-	_update_difficulty()
-	body_rest_scale = boxer_rig.scale
-	arm_overlay = StandardMaterial3D.new()
-	arm_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	arm_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	arm_overlay.albedo_color = Color(1.0, 0.5, 0.05, 0.35)
-	Global.enemy_hit.connect(_on_enemy_hit)
+	config = Global.level_config()
+	_load_boxer(str(config["model"]))
+	rest_left = arm_left.position
+	rest_right = arm_right.position
+	collision_layer = 2
+	collision_mask = 5
+	Global.enemy_hit.connect(_on_hit)
 	Global.enemy_died.connect(_on_died)
-	_set_state(State.RECOVER, 0.35)
+	warning_material = StandardMaterial3D.new()
+	warning_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	warning_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	warning_material.albedo_color = Color(1.0, 0.5, 0.05, 0.35)
 
+func _load_boxer(model: String) -> void:
+	var prefix := "res://Texturas/boxeador_%s_" % model
+	$BoxerRig/BoxerBody.mesh = load(prefix + "body.obj")
+	$BoxerRig/ArmLeftPivot/ArmLeftMesh.mesh = load(prefix + "left_arm.obj")
+	$BoxerRig/ArmRightPivot/ArmRightMesh.mesh = load(prefix + "right_arm.obj")
 
-## Recibe un golpe del jugador. El daño ya viene calculado por la velocidad del guante.
 func take_punch(damage: float, _force: float = 0.0, _side: String = "") -> void:
-	Global.damage_enemy(damage)
-
-
-func _update_difficulty() -> void:
-	diff = base_diff * (1.25 if rage else 1.0)
-	move_speed = base_move_speed * diff
-	circle_speed = base_circle_speed * diff
-
-
-# Tiempo escalado por dificultad, con un mínimo para que siempre se pueda reaccionar
-func _w(t: float, min_t := 0.15) -> float:
-	return maxf(t / diff, min_t)
-
+	if not ko:
+		Global.damage_enemy(damage)
 
 func _physics_process(delta: float) -> void:
 	Global.enemy_position = global_position
-
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-	else:
-		velocity.y = 0.0
-
-	if ko:
-		velocity.x = 0.0
-		velocity.z = 0.0
+	velocity.y = 0.0 if is_on_floor() else velocity.y - 9.8 * delta
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if ko or not Global.is_fighting():
 		move_and_slide()
 		return
-
-	_idle_animation(delta)
-
-	var to_player = Global.player_position - global_position
-	to_player.y = 0.0
-	var dist = to_player.length()
-	var dir = to_player.normalized() if dist > 0.01 else Vector3.ZERO
-
-	# Mirar al jugador
-	if dist > 0.05:
-		rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), 12.0 * delta)
-
-	if not Global.is_fighting():
-		velocity.x = 0.0
-		velocity.z = 0.0
-		move_and_slide()
-		return
-
-	# Furia: cuando está herido se vuelve más rápido y agresivo
-	if not rage and Global.enemy_health < rage_health:
-		rage = true
-		_update_difficulty()
-		_set_glove_color(RAGE_COLOR)
-		Global.notice.emit("¡Se enfureció!")
-
-	# Aprende tus hábitos
-	block_habit = lerpf(block_habit, 1.0 if Global.player_blocking else 0.0, delta * 0.6)
-	punch_habit = maxf(punch_habit - delta * 0.2, 0.0)
-	var retreating = dist > prev_dist + 0.002 and dist > 1.2
-	retreat_habit = lerpf(retreat_habit, 1.0 if retreating else 0.0, delta * 0.8)
-	prev_dist = dist
-
-	if parry_time > 0.0:
-		parry_time -= delta
-		if parry_time <= 0.0:
-			Global.enemy_parrying = false
-
-	# Reacciona cuando empezás o terminás de pegar
-	var p_now = Global.player_punching
-	if p_now and not prev_player_punching:
-		punch_habit = minf(punch_habit + 1.0, 4.0)
-		_react_to_punch(dist)
-	elif not p_now and prev_player_punching:
-		_try_counter(dist)
-	prev_player_punching = p_now
-
-	var wish := Vector3.ZERO
+	idle_time += delta
+	rig.position.y = sin(idle_time * 4.0) * 0.018
+	rig.rotation.z = sin(idle_time * 2.0) * 0.02
+	var offset := Global.player_position - global_position
+	offset.y = 0
+	var distance := offset.length()
+	var direction := offset.normalized()
+	if distance > 0.1:
+		rotation.y = lerp_angle(rotation.y, atan2(-direction.x, -direction.z), 1.0 - exp(-9 * delta))
 	state_time -= delta
+	reaction_cooldown = maxf(reaction_cooldown - delta, 0.0)
+	var new_punch := Global.player_punching and not previous_punch
+	previous_punch = Global.player_punching
+	if new_punch and reaction_cooldown <= 0 and state in [State.APPROACH, State.CIRCLE] and distance < 1.9:
+		_react()
+	var speed := 1.55 + float(Global.level_index) * 0.25
 	match state:
 		State.APPROACH:
-			if dist > Global.enemy_attack_range * 0.8:
-				wish = dir * move_speed
-			# Si te alejás, te corta el paso con un salto hacia adelante
-			if dist > Global.enemy_attack_range + 0.6 and _can_lunge():
-				_start_lunge()
-			elif dist <= Global.enemy_attack_range or state_time <= 0.0:
+			if distance > 1.15:
+				velocity += direction * speed
+			if distance <= 1.25:
 				_decide()
 		State.CIRCLE:
-			wish = Vector3(-dir.z, 0.0, dir.x) * circle_dir * circle_speed
-			if dist < 1.2:
-				wish -= dir * circle_speed
-			elif dist > Global.enemy_attack_range:
-				wish += dir * circle_speed * 0.7
-			if state_time <= 0.0:
+			velocity += Vector3(-direction.z, 0, direction.x) * circle_dir * speed * 0.45
+			velocity += direction * clampf(distance - 1.2, -0.5, 0.6)
+			if state_time <= 0:
 				_decide()
 		State.WINDUP:
-			# Sigue persiguiéndote un poco mientras carga el golpe
-			if dist > Global.enemy_attack_range * 0.9:
-				wish = dir * move_speed * 0.6
-			if state_time <= 0.0:
-				_windup_done()
-		State.RECOVER:
-			if state_time <= 0.0:
-				_decide()
-		State.BLOCK:
-			if state_time <= 0.0:
-				no_block_until = Time.get_ticks_msec() + 500
+			if state_time <= 0:
+				_start_strike()
+		State.STRIKE:
+			if not impact_done and state_time <= 0.12:
+				impact_done = true
+				if distance <= Global.enemy_attack_range + (0.1 if heavy else 0.0):
+					Global.damage_player(1.8 if heavy else 1.0, heavy, aimed_offset)
+			if state_time <= 0 and Global.is_fighting():
+				if combo_left > 0 and not heavy:
+					combo_left -= 1
+					use_left = not use_left
+					_start_attack(false, true)
+				else:
+					_set_state(State.RECOVER, float(config["recover"]) * (1.35 if heavy else 1.0))
+		State.RECOVER, State.BLOCK:
+			if state_time <= 0:
 				_decide()
 		State.DODGE:
-			wish = dodge_dir * 9.0
-			if state_time <= 0.0:
-				_after_dodge()
-		State.LUNGE:
-			wish = dir * 13.0
-			if dist <= Global.enemy_attack_range * 0.85 or state_time <= 0.0:
-				_after_lunge()
-
-	velocity.x = wish.x
-	velocity.z = wish.z
+			velocity += Vector3(-direction.z, 0, direction.x) * circle_dir * 2.8
+			if state_time <= 0:
+				_set_state(State.RECOVER, 0.6)
+	# No superponer cuerpos y mantener el combate al alcance de los guantes.
+	if distance < 1.02:
+		velocity -= direction * 1.3
 	move_and_slide()
+	position.x = clampf(position.x, -3.7, 3.7)
+	position.z = clampf(position.z, -3.7, 3.7)
+	Global.enemy_position = global_position
 
-
-# ------------------------------------------------------------ Decisiones
 func _decide() -> void:
 	if not Global.is_fighting():
 		return
-	var dist := _flat_distance()
-	if dist > Global.enemy_attack_range:
-		if dist < Global.enemy_attack_range + 3.0 and _can_lunge() and randf() < 0.4 + retreat_habit * 0.4:
-			_start_lunge()
-		else:
-			_set_state(State.APPROACH, randf_range(0.3, 0.7))
+	if global_position.distance_to(Global.player_position) > 1.5:
+		_set_state(State.APPROACH, 1.0)
 		return
-
-	var w_attack := 0.60
-	var w_block := 0.12
-	var w_move := 0.18
-
-	if Global.player_punching:
-		w_block += 0.3
-		w_attack -= 0.15
-	if Global.player_blocking:
-		w_attack += 0.1    # si te cubrís, te castiga igual (pesados y fintas)
-		w_move += 0.1
-	else:
-		w_attack += 0.2
-	if Global.player_health < 40.0:
-		w_attack += 0.25   # te ve débil: te remata
-	if Global.enemy_health < 40.0:
-		w_block += 0.1     # herido: se cubre un poco más, pero la furia lo hace atacar
-		w_attack += 0.1
-	if Time.get_ticks_msec() < no_block_until:
-		w_block = 0.0
-
-	w_attack = maxf(w_attack, 0.2)
-	w_move = maxf(w_move, 0.05)
-	var roll := randf() * (w_attack + w_block + w_move)
-	if roll < w_attack:
-		_choose_attack()
-	elif roll < w_attack + w_block:
-		_set_state(State.BLOCK, randf_range(0.5, 1.0))
-	else:
-		circle_dir = 1.0 if randf() < 0.5 else -1.0
-		_set_state(State.CIRCLE, randf_range(0.3, 0.7))
-
-
-func _choose_attack() -> void:
-	var p_heavy := 0.22 + block_habit * 0.5
-	if Global.player_blocking:
-		p_heavy += 0.25
-	if rage:
-		p_heavy += 0.12
-	var p_feint := 0.12 + punch_habit * 0.05
-	var r := randf()
-	combo_left = 0
-	did_combo = false
-	use_left = randf() < 0.5
-	if r < p_heavy:
-		_start_attack(Attack.HEAVY, _w(0.6, 0.3))
-	elif r < p_heavy + p_feint:
-		_start_attack(Attack.FEINT, _w(0.25, 0.14))
-	else:
-		combo_left = randi() % (mini(Global.round_number + 1, 4) + 1)
-		_start_attack(Attack.JAB, _w(base_windup, 0.12))
-
-
-func _start_attack(kind: Attack, windup: float) -> void:
-	attack = kind
-	_set_state(State.WINDUP, windup)
-
-
-func _windup_done() -> void:
-	if attack == Attack.FEINT:
-		# Finta: si te cubrís o pegás, te castiga con el pesado
-		if Global.player_blocking or Global.player_punching:
-			_start_attack(Attack.HEAVY, _w(0.4, 0.25))
-		else:
-			# Si no mordiste la finta, entra directo con un jab rápido
-			use_left = randf() < 0.5
-			_start_attack(Attack.JAB, _w(0.18, 0.1))
-	else:
-		_strike()
-
-
-func _strike() -> void:
-	var heavy := attack == Attack.HEAVY
-	_animate_body_punch(heavy)
-	var mult := 1.2 if rage else 1.0
-	if _flat_distance() <= Global.enemy_attack_range + 0.4:
-		Global.damage_player((heavy_damage if heavy else jab_damage) * mult, heavy)
-
-	var punching_left := use_left and not heavy
-	var arm := arm_l if punching_left else arm_r
-	var punch_rotation := HOOK_R if heavy else (JAB_L if punching_left else JAB_R)
-	var punch_advance := HOOK_ADVANCE if heavy else JAB_ADVANCE
-	var rest_rotation := REST_L if punching_left else REST_R
-
-	if combo_left > 0 and not heavy and Global.is_fighting():
-		combo_left -= 1
-		did_combo = true
-		use_left = not use_left
-		_start_attack(Attack.JAB, _w(0.18, 0.1))
-	elif did_combo and not heavy and Global.is_fighting() and randf() < 0.4:
-		# Remate: termina el combo con un golpe pesado
-		did_combo = false
-		_start_attack(Attack.HEAVY, _w(0.45, 0.25))
-	else:
-		combo_left = 0
-		did_combo = false
-		_set_state(State.RECOVER, _w(base_recover) * (1.5 if heavy else 1.0))
-	_punch_arm(arm, punch_rotation, rest_rotation, punch_advance)
-
-
-func _react_to_punch(dist: float) -> void:
-	if state in [State.WINDUP, State.BLOCK, State.DODGE, State.LUNGE]:
-		return
-	# Después de un golpe pesado queda expuesto: ahí podés castigarlo
-	if state == State.RECOVER and attack == Attack.HEAVY:
-		return
-	if dist > Global.enemy_attack_range + 0.7:
-		return
-	var now := Time.get_ticks_msec()
-	var scale := 0.5 if state == State.RECOVER else 1.0
 	var roll := randf()
-	var p_dodge := minf(0.4 * diff, 0.7) * scale
-	var p_block := 0.3 * scale
-	if now >= no_dodge_until and roll < p_dodge:
-		_start_dodge()
-	elif now >= no_block_until and roll < p_dodge + p_block:
-		_set_state(State.BLOCK, randf_range(0.4, 0.8))
-		parry_time = 0.3
-		Global.enemy_parrying = true
-
-
-func _try_counter(dist: float) -> void:
-	if state in [State.WINDUP, State.RECOVER, State.DODGE, State.LUNGE]:
-		return
-	if dist > Global.enemy_attack_range + 0.4:
-		return
-	if randf() < minf(0.65 * diff, 0.95):
-		combo_left = 0
-		did_combo = false
-		use_left = randf() < 0.5
-		# A veces el contraataque es pesado
-		if randf() < 0.2:
-			_start_attack(Attack.HEAVY, _w(0.45, 0.25))
-		else:
-			_start_attack(Attack.JAB, _w(0.2, 0.1))
-
-
-func _start_dodge() -> void:
-	var dir := _dir_to_player()
-	var side := Vector3(-dir.z, 0.0, dir.x) * (1.0 if randf() < 0.5 else -1.0)
-	# A veces esquiva hacia atrás, a veces de costado
-	var back := 0.5 if randf() < 0.6 else 1.1
-	dodge_dir = (side - dir * back).normalized()
-	no_dodge_until = Time.get_ticks_msec() + 900
-	_set_state(State.DODGE, 0.22)
-
-
-func _after_dodge() -> void:
-	if _flat_distance() <= Global.enemy_attack_range + 0.7 and randf() < 0.85:
-		combo_left = 0
-		did_combo = false
-		use_left = randf() < 0.5
-		if randf() < 0.25:
-			_start_attack(Attack.HEAVY, _w(0.45, 0.25))
-		else:
-			combo_left = randi() % 2
-			_start_attack(Attack.JAB, _w(0.18, 0.1))
+	if roll < 0.12 + Global.level_index * 0.05:
+		_set_state(State.BLOCK, randf_range(0.45, 0.7))
+	elif roll < 0.3:
+		circle_dir = -1.0 if randf() < 0.5 else 1.0
+		_set_state(State.CIRCLE, randf_range(0.4, 0.7))
 	else:
-		_decide()
-
-
-# Salto hacia adelante para cerrar distancia
-func _can_lunge() -> bool:
-	return Time.get_ticks_msec() >= no_lunge_until
-
-
-func _start_lunge() -> void:
-	no_lunge_until = Time.get_ticks_msec() + 2500
-	_set_state(State.LUNGE, 0.3)
-
-
-func _after_lunge() -> void:
-	if _flat_distance() <= Global.enemy_attack_range + 0.4:
-		combo_left = 1
-		did_combo = false
 		use_left = randf() < 0.5
-		_start_attack(Attack.JAB, _w(0.14, 0.1))
-	else:
-		_decide()
+		var is_heavy := randf() < (0.15 + Global.level_index * 0.09 + (0.15 if Global.player_blocking else 0.0))
+		combo_left = randi_range(0, int(config["combos"]) - 1) if not is_heavy else 0
+		_start_attack(is_heavy)
 
+func _react() -> void:
+	reaction_cooldown = 1.6
+	var roll := randf()
+	if roll < 0.08 + Global.level_index * 0.09:
+		_set_state(State.BLOCK, 0.5)
+	elif Global.level_index > 0 and roll < 0.17 + Global.level_index * 0.09:
+		circle_dir = -1.0 if randf() < 0.5 else 1.0
+		_set_state(State.DODGE, 0.22)
 
-# ------------------------------------------------------------ Estados y animación
-func _set_state(new_state: State, duration: float) -> void:
-	state = new_state
-	state_time = duration
-	Global.enemy_blocking = (new_state == State.BLOCK)
-	Global.enemy_punching = (new_state == State.WINDUP)
-	Global.enemy_parrying = false
-	parry_time = 0.0
-	var heavy := new_state == State.WINDUP and attack == Attack.HEAVY
-	var normal_color := RAGE_COLOR if rage else GLOVE_COLOR
-	_set_glove_color(HEAVY_COLOR if heavy else normal_color)
-	match new_state:
-		State.BLOCK:
-			_move_arm(arm_r, GUARD_R, 0.12)
-			_move_arm(arm_l, GUARD_L, 0.12)
-		State.WINDUP:
-			if attack == Attack.HEAVY or not use_left:
-				_move_arm(arm_r, WINDUP_R, duration)
-				_move_arm(arm_l, REST_L, 0.15)
-			else:
-				_move_arm(arm_l, WINDUP_L, duration)
-				_move_arm(arm_r, REST_R, 0.15)
-		_:
-			_move_arm(arm_r, REST_R, 0.2)
-			_move_arm(arm_l, REST_L, 0.2)
+func _start_attack(is_heavy: bool, combo := false) -> void:
+	aimed_offset = Global.player_head_offset
+	heavy = is_heavy
+	impact_done = false
+	var windup := float(config["windup"]) * (1.5 if heavy else 1.0)
+	if combo:
+		windup = maxf(windup * 0.8, 0.32)
+	_set_state(State.WINDUP, windup)
+	var arm := arm_left if use_left else arm_right
+	if attack_tween:
+		attack_tween.kill()
+	attack_tween = create_tween()
+	attack_tween.tween_property(arm, "rotation:y", 0.3 if use_left else -0.3, windup)
 	if heavy:
-		Global.notice.emit("¡GOLPE PESADO! ¡Alejate!")
+		Global.notice.emit("¡GOLPE PESADO! Alejate o esquivá de costado")
+		_set_warning(true)
 
+func _start_strike() -> void:
+	_set_state(State.STRIKE, 0.24)
+	var arm := arm_left if use_left else arm_right
+	var rest := rest_left if use_left else rest_right
+	if attack_tween:
+		attack_tween.kill()
+	attack_tween = create_tween()
+	attack_tween.tween_property(arm, "position", rest + Vector3(0, 0, 0.95), 0.12)
+	attack_tween.parallel().tween_property(arm, "rotation:y", -0.35 if use_left else 0.35, 0.12)
+	attack_tween.tween_property(arm, "position", rest, 0.12)
+	attack_tween.parallel().tween_property(arm, "rotation:y", 0.0, 0.12)
 
-func _move_arm(arm: Node3D, target_rotation: Vector3, duration: float) -> void:
-	if tweens.has(arm.name):
-		(tweens[arm.name] as Tween).kill()
-	var tw := create_tween()
-	tw.tween_property(arm, "rotation", target_rotation, duration)
-	tweens[arm.name] = tw
+func _set_state(next: State, duration: float) -> void:
+	state = next
+	state_time = duration
+	Global.enemy_blocking = state == State.BLOCK
+	Global.enemy_punching = state in [State.WINDUP, State.STRIKE]
+	Global.enemy_parrying = false
+	if state not in [State.WINDUP, State.STRIKE]:
+		_set_warning(false)
+		if attack_tween:
+			attack_tween.kill()
+		arm_left.position = rest_left
+		arm_right.position = rest_right
+		arm_left.rotation = Vector3(0, 0.25 if state == State.BLOCK else 0.0, 0)
+		arm_right.rotation = Vector3(0, -0.25 if state == State.BLOCK else 0.0, 0)
 
+func _set_warning(active: bool) -> void:
+	$BoxerRig/ArmLeftPivot/ArmLeftMesh.material_overlay = warning_material if active else null
+	$BoxerRig/ArmRightPivot/ArmRightMesh.material_overlay = warning_material if active else null
 
-func _punch_arm(arm: Node3D, punch_rotation: Vector3, rest_rotation: Vector3, advance: Vector3) -> void:
-	if tweens.has(arm.name):
-		(tweens[arm.name] as Tween).kill()
-	var rest_position := arm.position
-	var punch_position := rest_position + advance
-	var tw := create_tween()
-	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(arm, "rotation", punch_rotation, 0.07)
-	tw.parallel().tween_property(arm, "position", punch_position, 0.07)
-	tw.set_ease(Tween.EASE_IN)
-	tw.tween_property(arm, "rotation", rest_rotation, 0.2)
-	tw.parallel().tween_property(arm, "position", rest_position, 0.2)
-	tweens[arm.name] = tw
-
-
-func _set_glove_color(c: Color) -> void:
-	if c == GLOVE_COLOR:
-		arm_r_mesh.material_overlay = null
-		arm_l_mesh.material_overlay = null
-	else:
-		arm_overlay.albedo_color = Color(c.r, c.g, c.b, 0.35)
-		arm_r_mesh.material_overlay = arm_overlay
-		arm_l_mesh.material_overlay = arm_overlay
-
-
-func _flat_distance() -> float:
-	var d = Global.player_position - global_position
-	d.y = 0.0
-	return d.length()
-
-
-func _dir_to_player() -> Vector3:
-	var d = Global.player_position - global_position
-	d.y = 0.0
-	return d.normalized()
-
-
-func _on_enemy_hit(blocked: bool) -> void:
+func _on_hit(blocked: bool) -> void:
+	if ko:
+		return
 	if flash_tween:
 		flash_tween.kill()
-	boxer_rig.scale = body_rest_scale * (1.02 if blocked else 1.05)
+	rig.scale = Vector3(-0.62, 0.62, -0.62) * (1.015 if blocked else 1.035)
 	flash_tween = create_tween()
-	flash_tween.tween_property(boxer_rig, "scale", body_rest_scale, 0.16)
-	# Un golpe limpio interrumpe el ataque, salvo el pesado (super armadura).
-	# Además, a mayor dificultad y en furia, a veces aguanta el golpe y sigue.
-	if not blocked and state == State.WINDUP and attack != Attack.HEAVY:
-		var armor := 0.15 * (diff - 1.0) + (0.35 if rage else 0.0)
-		if randf() >= armor:
-			combo_left = 0
-			did_combo = false
-			_set_state(State.RECOVER, 0.3)
-	# Si lo golpeás, a veces devuelve el golpe enseguida
-	elif not blocked and (state == State.APPROACH or state == State.CIRCLE) and randf() < 0.5:
-		use_left = randf() < 0.5
+	flash_tween.tween_property(rig, "scale", Vector3(-0.62, 0.62, -0.62), 0.15)
+	# Interrumpir un jab recompensa pegar a tiempo. Un pesado sigue anunciado.
+	if not blocked and state == State.WINDUP and not heavy:
 		combo_left = 0
-		_start_attack(Attack.JAB, _w(0.2, 0.1))
-
+		_set_state(State.RECOVER, 0.6)
 
 func _on_died() -> void:
 	ko = true
-	_set_state(State.RECOVER, 99.0)
+	_set_state(State.RECOVER, 99)
 	$CollisionShape3D.set_deferred("disabled", true)
-	var t := create_tween().set_parallel(true)
-	t.tween_property(self, "rotation:x", deg_to_rad(90.0), 0.6)
-	t.tween_property(self, "position:y", 0.3, 0.6)
-
-
-func _idle_animation(delta: float) -> void:
-	idle_time += delta
-	boxer_rig.position.y = sin(idle_time * 4.0) * 0.018
-	boxer_rig.rotation.z = sin(idle_time * 2.2) * 0.025
-
-
-func _animate_body_punch(heavy: bool) -> void:
-	if body_pose_tween and body_pose_tween.is_running():
-		body_pose_tween.kill()
-	body_pose_tween = create_tween()
-	var lean := deg_to_rad(5.0 if heavy else 2.5)
-	body_pose_tween.tween_property(boxer_rig, "rotation:x", lean, 0.08)
-	body_pose_tween.tween_property(boxer_rig, "rotation:x", 0.0, 0.18)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(self, "rotation:x", deg_to_rad(85), 0.55)
+	tween.tween_property(self, "position:y", 0.3, 0.55)

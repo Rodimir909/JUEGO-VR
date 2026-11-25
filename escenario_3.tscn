@@ -1,9 +1,11 @@
 [gd_scene format=3 uid="uid://cxqmny2p0hw1i"]
 
-[ext_resource type="ArrayMesh" uid="uid://bxgpbb1u8u6xb" path="res://Texturas/escenario_estadio.obj" id="1_7cvcu"]
-[ext_resource type="PackedScene" path="res://scenes/player ishma.tscn" id="2_46ipp"]
-[ext_resource type="PackedScene" uid="uid://rgb4b6juon8d" path="res://scenes/enemy.tscn" id="3_p3vao"]
-[ext_resource type="PackedScene" uid="uid://6ufluadok1wr" path="res://scenes/hud.tscn" id="4_awgsi"]
+[ext_resource type="ArrayMesh" path="res://Texturas/escenario_estadio.obj" id="1_7cvcu"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="2_46ipp"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="3_p3vao"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="4_awgsi"]
+
+[ext_resource type="Script" path="res://scripts/arena.gd" id="99_arena"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_cjdqc"]
 size = Vector3(11.796753, 0.064453125, 11.58667)
@@ -12,6 +14,7 @@ size = Vector3(11.796753, 0.064453125, 11.58667)
 size = Vector3(0.123413086, 0.08300781, 9.9984665)
 
 [node name="escenario 3" type="Node3D" unique_id=1657778141]
+script = ExtResource("99_arena")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=862912212]
 
@@ -40,7 +43,7 @@ shape = SubResource("BoxShape3D_0eft3")
 
 [node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=265029469]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 28.421875, -0.034499645)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 300.79703
 
 [node name="Player" parent="." unique_id=1941943038 instance=ExtResource("2_46ipp")]
@@ -53,5 +56,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.8929968)
 
 [node name="OmniLight3D2" type="OmniLight3D" parent="." unique_id=402046516]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032696724, 5.8720865, -0.034499645)
-light_energy = 16.0
+light_energy = 1.8
 omni_range = 16.0

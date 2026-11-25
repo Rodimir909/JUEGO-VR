@@ -1,3 +1,9 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+# Entornos locales de seguimiento
+**/__pycache__/
+**/.venv/
+**/venv311/
+**/.runtime/
+tests/*_preview*.png
