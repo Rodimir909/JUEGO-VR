@@ -75,6 +75,13 @@ class TrackingCore:
         return self.filters[key](value, timestamp)
 
     @staticmethod
+    def axis(points, start, end, aspect):
+        a, b = points[start], points[end]
+        vector = ((b["x"] - a["x"]) * aspect, -(b["y"] - a["y"]), (b["z"] - a["z"]) * aspect)
+        length = math.sqrt(sum(component * component for component in vector))
+        return tuple(component / length for component in vector) if length > 1e-6 else None
+
+    @staticmethod
     def valid(point, confidence=0.5):
         return (point is not None and point.get("visibility", 1.0) >= confidence
                 and all(math.isfinite(point.get(k, 0.0)) for k in ("x", "y", "z")))
@@ -90,7 +97,7 @@ class TrackingCore:
         packet = {"version": 2, "frame": self.frame, "t": timestamp,
                   "calibrated": False, "left": {}, "right": {},
                   "head": {"valid": False}, "guard": False,
-                  "pause_pose": False, "cursor": {"visible": False}}
+                  "pause_pose": False, "cursor": {"visible": False}, "orient": {}}
         if not pose or len(pose) < 33 or not all(self.valid(pose[i], 0.6) for i in (11, 12)):
             self.reset_arm("left")
             self.reset_arm("right")
@@ -182,6 +189,21 @@ class TrackingCore:
             filtered = [self.filtered(side + "." + key, value, timestamp) for key, value in zip("xyz", raw)]
             packet[side] = {"rel": dict(zip("xyz", filtered)),
                             "wrist": {"x": 1 - wx, "y": wy, "visibility": visibility}}
+
+        for side in observed:
+            hand = hands.get(side) or []
+            if len(hand) != 21 or not all(self.valid(hand[index]) for index in (0, 5, 9, 17)):
+                continue
+            forward = self.axis(hand, 0, 9, aspect)
+            across = self.axis(hand, 5, 17, aspect)
+            if forward is None or across is None:
+                continue
+            packet["orient"][side] = {
+                "f": [round(self.filtered(f"{side}.orient.f.{i}", value, timestamp, 1.0, 2.0), 4)
+                      for i, value in enumerate(forward)],
+                "s": [round(self.filtered(f"{side}.orient.s.{i}", value, timestamp, 1.0, 2.0), 4)
+                      for i, value in enumerate(across)],
+            }
 
         if self.reference:
             x = clamp((body[0] - self.reference[0]) / self.reference[2] * 0.4, -0.4, 0.4)

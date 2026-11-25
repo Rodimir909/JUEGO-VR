@@ -7,6 +7,14 @@ signal punch_landed(target: Node, side: String, damage: float, force: float)
 
 @export var udp_port := 4242
 @export var glove_smoothing := 28.0
+@export var rotate_gloves := true
+@export var rotation_smoothing := 25.0
+@export var rotation_gain := 1.0
+@export var max_glove_angle := 150.0
+@export var rotation_lost_timeout := 0.3
+@export var auto_center_models := true
+@export var rotate_around_model_center := true
+@export var glove_visual_center := Vector3(0.0, -0.04, 0.09)
 @export var head_smoothing := 14.0
 @export var punch_start_speed := 1.35
 @export var punch_max_speed := 6.5
@@ -31,6 +39,14 @@ var right_target := REST_RIGHT
 var head_target := Vector3.ZERO
 var rotation_target := Vector3.ZERO
 var previous_gloves := {"left": Vector3.ZERO, "right": Vector3.ZERO}
+var left_base := REST_LEFT
+var right_base := REST_RIGHT
+var left_pivot := Vector3.ZERO
+var right_pivot := Vector3.ZERO
+var left_rot_target := Quaternion.IDENTITY
+var right_rot_target := Quaternion.IDENTITY
+var left_rot_lost := 0.0
+var right_rot_lost := 0.0
 var was_tracking := false
 var valid_body_age := 0.0
 var had_valid_body := false
@@ -63,14 +79,20 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_to_group("player")
 	keyboard_override = Global.keyboard_override
-	_style_glove(left_glove, false)
-	_style_glove(right_glove, true)
+	if left_glove.get_node_or_null('MeshInstance3D') is MeshInstance3D:
+		_style_glove(left_glove, false)
+	if right_glove.get_node_or_null('MeshInstance3D') is MeshInstance3D:
+		_style_glove(right_glove, true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if udp.bind(udp_port, "127.0.0.1") != OK:
 		Global.tracking_status = "Puerto de webcam ocupado · Usá teclado y mouse"
 	command_udp.set_dest_address("127.0.0.1", udp_port + 1)
 	left_glove.position = REST_LEFT
 	right_glove.position = REST_RIGHT
+	left_base = REST_LEFT
+	right_base = REST_RIGHT
+	left_pivot = _setup_glove_model(left_glove)
+	right_pivot = _setup_glove_model(right_glove)
 	previous_gloves["left"] = left_glove.global_position
 	previous_gloves["right"] = right_glove.global_position
 	Global.camera_active = false
@@ -95,6 +117,12 @@ func _process(delta: float) -> void:
 	valid_body_age += delta
 	left_age += delta
 	right_age += delta
+	left_rot_lost += delta
+	right_rot_lost += delta
+	if left_rot_lost > rotation_lost_timeout:
+		left_rot_target = Quaternion.IDENTITY
+	if right_rot_lost > rotation_lost_timeout:
+		right_rot_target = Quaternion.IDENTITY
 	var bytes := PackedByteArray()
 	while udp.get_available_packet_count() > 0:
 		bytes = udp.get_packet()
@@ -200,8 +228,14 @@ func _physics_process(delta: float) -> void:
 	# Los guantes acompañan el torso al agacharse sin arrastrar el giro de mirada.
 	var body_offset := head_target * Vector3(0.8, 0.85, 0.4)
 	var weight := 1.0 - exp(-glove_smoothing * delta)
-	left_glove.position = left_glove.position.lerp(left_target + body_offset, weight)
-	right_glove.position = right_glove.position.lerp(right_target + body_offset, weight)
+	left_base = left_base.lerp(left_target + body_offset, weight)
+	right_base = right_base.lerp(right_target + body_offset, weight)
+	if rotate_gloves:
+		var rotation_weight := 1.0 - exp(-rotation_smoothing * delta)
+		left_glove.quaternion = left_glove.quaternion.slerp(left_rot_target, rotation_weight)
+		right_glove.quaternion = right_glove.quaternion.slerp(right_rot_target, rotation_weight)
+	left_glove.position = left_base + left_pivot - left_glove.quaternion * left_pivot
+	right_glove.position = right_base + right_pivot - right_glove.quaternion * right_pivot
 	_check_hit("left", left_glove)
 	_check_hit("right", right_glove)
 
@@ -244,6 +278,16 @@ func _read_packet(data: Dictionary) -> void:
 			right_age = 0.0
 		if Global.tracking_ready:
 			_track_punch(side, target, capture)
+	var orient: Variant = data.get("orient")
+	if orient is Dictionary:
+		var left_rotation: Variant = _hand_rotation(orient.get("left"))
+		if left_rotation != null:
+			left_rot_target = left_rotation
+			left_rot_lost = 0.0
+		var right_rotation: Variant = _hand_rotation(orient.get("right"))
+		if right_rotation != null:
+			right_rot_target = right_rotation
+			right_rot_lost = 0.0
 	var h: Variant = data.get("head")
 	if h is Dictionary and h.get("valid", false):
 		valid_body_age = 0.0
@@ -370,6 +414,59 @@ func _update_pause(delta: float) -> void:
 				pause_hold = 0.0
 				pause_requested.emit()
 	pause_hold_progress.emit(pause_hold / 1.2)
+
+func _hand_rotation(orientation: Variant) -> Variant:
+	if typeof(orientation) != TYPE_DICTIONARY or not orientation.has("f") or not orientation.has("s"):
+		return null
+	var forward_values: Array = orientation["f"]
+	var side_values: Array = orientation["s"]
+	if forward_values.size() < 3 or side_values.size() < 3:
+		return null
+	var forward := Vector3(float(forward_values[0]), float(forward_values[1]), float(forward_values[2]))
+	var side := Vector3(float(side_values[0]), float(side_values[1]), float(side_values[2]))
+	if forward.length_squared() < 0.0001 or side.length_squared() < 0.0001:
+		return null
+	forward = forward.normalized()
+	var up := -side
+	up -= forward * up.dot(forward)
+	if up.length_squared() < 0.01:
+		return null
+	up = up.normalized()
+	var back := -forward
+	var basis := Basis(up.cross(back), up, back).orthonormalized()
+	var result := basis.get_rotation_quaternion()
+	if rotation_gain < 1.0:
+		result = Quaternion.IDENTITY.slerp(result, clampf(rotation_gain, 0.0, 1.0))
+	var max_angle := deg_to_rad(max_glove_angle)
+	if result.get_angle() > max_angle:
+		result = Quaternion.IDENTITY.slerp(result, max_angle / result.get_angle())
+	return result
+
+
+func _model_bounds(glove: Node3D) -> Variant:
+	var inverse := glove.global_transform.affine_inverse()
+	var bounds := AABB()
+	var found := false
+	for node in glove.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		var box: AABB = (inverse * mesh_instance.global_transform) * mesh_instance.get_aabb()
+		bounds = box if not found else bounds.merge(box)
+		found = true
+	return bounds if found else null
+
+
+func _setup_glove_model(glove: Node3D) -> Vector3:
+	var bounds: Variant = _model_bounds(glove)
+	if bounds == null:
+		return Vector3.ZERO
+	var center: Vector3 = (bounds as AABB).get_center()
+	if auto_center_models:
+		for child in glove.get_children():
+			if child is Node3D and not (child is CollisionShape3D):
+				(child as Node3D).position += glove_visual_center - center
+				center = glove_visual_center
+				break
+	return center if rotate_around_model_center else Vector3.ZERO
 
 func _style_glove(glove: Area3D, right: bool) -> void:
 	var main := glove.get_node("MeshInstance3D") as MeshInstance3D
